@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from 'react';
+import { createContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export const AuthContext = createContext();
@@ -12,18 +12,20 @@ export const AuthProvider = ({ children }) => {
         const token = localStorage.getItem('token');
         const role = localStorage.getItem('role');
         const name = localStorage.getItem('name');
-        
+        const userId = localStorage.getItem('userId');
+
         if (token && role) {
-            setUser({ token, role, name });
+            setUser({ token, role, name, userId });
         }
         setLoading(false);
     }, []);
 
-    const login = (token, role, name) => {
+    const login = (token, role, name, userId) => {
         localStorage.setItem('token', token);
         localStorage.setItem('role', role);
         localStorage.setItem('name', name);
-        setUser({ token, role, name });
+        localStorage.setItem('userId', userId);
+        setUser({ token, role, name, userId });
         
         if (role === 'user') navigate('/student/dashboard');
         else if (role === 'admin') navigate('/admin/dashboard');
