@@ -7,25 +7,41 @@ export default function AdminDashboard() {
     const { user } = useContext(AuthContext);
     const [stats, setStats] = useState({ pending: 0, today: 0, completed: 0 });
     const [todayAppointments, setTodayAppointments] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
+                // Fetch Stats
                 const statsRes = await fetch('http://localhost:5000/api/admin/dashboard-stats', {
                     headers: { 'Authorization': `Bearer ${user.token}` }
                 });
-                if (statsRes.ok) setStats(await statsRes.json());
+                
+                if (statsRes.ok) {
+                    const statsData = await statsRes.json();
+                    setStats(statsData);
+                } else {
+                    console.error("Failed to fetch stats status:", statsRes.status);
+                }
 
+                // Fetch Today's Appointments
                 const apptRes = await fetch('http://localhost:5000/api/admin/appointments', {
                     headers: { 'Authorization': `Bearer ${user.token}` }
                 });
+                
                 if (apptRes.ok) {
                     const data = await apptRes.json();
-                    const today = new Date().toISOString().split('T')[0];
-                    setTodayAppointments(data.filter(a => a.appointment_date.startsWith(today)));
+                    // Get local date in YYYY-MM-DD format dynamically
+                    const todayLocal = new Date().toLocaleDateString('en-CA'); 
+                    
+                    setTodayAppointments(
+                        data.filter(a => a.appointment_date.startsWith(todayLocal))
+                    );
                 }
             } catch (err) {
-                console.error("Failed to fetch admin dashboard data");
+                console.error("Failed to fetch admin dashboard data:", err);
+            } finally {
+                setLoading(false);
             }
         };
         fetchDashboardData();
@@ -42,17 +58,17 @@ export default function AdminDashboard() {
                 <div className="stat-card">
                     <div className="stat-icon bg-green"><Calendar size={24} color="#16a34a" /></div>
                     <div className="stat-title">Today's Appointments</div>
-                    <div className="stat-value">{stats.today}</div>
+                    <div className="stat-value">{loading ? '...' : stats.today}</div>
                 </div>
                 <div className="stat-card">
                     <div className="stat-icon bg-orange"><Clock size={24} color="#ea580c" /></div>
                     <div className="stat-title">Pending Appointments</div>
-                    <div className="stat-value">{stats.pending}</div>
+                    <div className="stat-value">{loading ? '...' : stats.pending}</div>
                 </div>
                 <div className="stat-card">
                     <div className="stat-icon bg-blue"><Users size={24} color="#2563eb" /></div>
                     <div className="stat-title">Total Completed</div>
-                    <div className="stat-value">{stats.completed}</div>
+                    <div className="stat-value">{loading ? '...' : stats.completed}</div>
                 </div>
                 <div className="stat-card">
                     <div className="stat-icon bg-green-alt"><FileText size={24} color="#15803d" /></div>
@@ -76,7 +92,7 @@ export default function AdminDashboard() {
                                         <strong>{appt.appointment_time}</strong>
                                         <span>{appt.student_name}</span>
                                     </div>
-                                    <div className={`appt-status ${appt.status}`}>{appt.status}</div>
+                                    <div className={`appt-status ${appt.status}`}>{appt.status.toUpperCase()}</div>
                                     <div className="appt-reason">{appt.reason}</div>
                                 </div>
                             ))}

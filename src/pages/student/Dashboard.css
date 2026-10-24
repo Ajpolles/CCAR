@@ -17,7 +17,6 @@
     font-size: 14px;
 }
 
-/* Stats Grid */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -61,7 +60,6 @@
     color: #0f172a;
 }
 
-/* Sections */
 .dashboard-sections {
     display: flex;
     flex-direction: column;
@@ -100,7 +98,6 @@
     text-decoration: underline;
 }
 
-/* Appointment Details */
 .appointment-details {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -139,7 +136,6 @@
     font-size: 14px;
 }
 
-/* Quick Actions Button */
 .quick-action-btn {
     display: flex;
     align-items: center;
@@ -161,7 +157,6 @@
     background-color: #1d4ed8;
 }
 
-/* Forms (Book Appointment) */
 .form-card {
     background: #fff;
     padding: 32px;
@@ -245,7 +240,6 @@
 .alert-error { background-color: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
 .alert-success { background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
 
-/* Records List */
 .records-list {
     display: flex;
     flex-direction: column;
@@ -304,7 +298,6 @@
 
 .field-value { color: #0f172a; line-height: 1.5; }
 
-/* Profile Grid */
 .profile-header {
     display: flex;
     align-items: center;

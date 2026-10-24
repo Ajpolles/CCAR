@@ -7,11 +7,9 @@ export default function PatientRecords() {
     const [records, setRecords] = useState([]);
     const [students, setStudents] = useState([]);
     
-    // Student Selection States
     const [searchQuery, setSearchQuery] = useState('');
     const [foundStudent, setFoundStudent] = useState(null);
     
-    // Form State
     const [formData, setFormData] = useState({ 
         appointment_id: '', 
         visit_date: '', 
@@ -21,13 +19,13 @@ export default function PatientRecords() {
 
     const fetchData = async () => {
         try {
-            // Fetch Records History
+            
             const recordsRes = await fetch('http://localhost:5000/api/admin/records', {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             if (recordsRes.ok) setRecords(await recordsRes.json());
 
-            // Fetch All Students for the Table
+            
             const studentsRes = await fetch('http://localhost:5000/api/admin/students', {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
@@ -41,7 +39,7 @@ export default function PatientRecords() {
         fetchData(); 
     }, [user.token]);
 
-    // Handle Manual ID Search
+    
     const handleSearch = async (e) => {
         e.preventDefault();
         const res = await fetch(`http://localhost:5000/api/admin/users/search/${searchQuery}`, {
@@ -49,20 +47,20 @@ export default function PatientRecords() {
         });
         if (res.ok) {
             setFoundStudent(await res.json());
-            setSearchQuery(''); // Clear search box
+            setSearchQuery(''); 
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
             alert('Student ID not found in the system.');
         }
     };
 
-    // Handle Table Selection
+    
     const handleSelectFromTable = (student) => {
         setFoundStudent(student);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Handle Submitting the Record
+    
     const handleSubmitRecord = async (e) => {
         e.preventDefault();
         await fetch('http://localhost:5000/api/admin/records', {
@@ -73,7 +71,7 @@ export default function PatientRecords() {
         
         setFormData({ appointment_id: '', visit_date: '', diagnosis_notes: '', consultation_notes: '' });
         setFoundStudent(null); 
-        fetchData(); // Refresh history
+        fetchData(); 
     };
 
     return (
@@ -83,10 +81,8 @@ export default function PatientRecords() {
                 <p>Log and review medical histories.</p>
             </div>
 
-            {/* TOP SECTION: SEARCH/FORM & RECENT RECORDS */}
             <div className="dashboard-sections" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px', marginBottom: '32px' }}>
                 
-                {/* LEFT COLUMN: Search or Logging Form */}
                 <div className="form-card" style={{ maxWidth: '100%', height: 'fit-content' }}>
                     
                     {!foundStudent ? (
@@ -148,7 +144,6 @@ export default function PatientRecords() {
                     )}
                 </div>
 
-                {/* RIGHT COLUMN: Recent Records */}
                 <div className="section-card">
                     <h3>Recent Patient Records</h3>
                     <div className="records-list" style={{ marginTop: '16px' }}>
@@ -177,7 +172,6 @@ export default function PatientRecords() {
                 </div>
             </div>
 
-            {/* BOTTOM SECTION: STUDENTS TABLE */}
             <div className="section-card">
                 <h3>Registered Students</h3>
                 <div style={{ overflowX: 'auto', marginTop: '16px' }}>

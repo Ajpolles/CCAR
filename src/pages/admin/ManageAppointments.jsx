@@ -34,7 +34,7 @@ export default function ManageAppointments() {
                 },
                 body: JSON.stringify({ status })
             });
-            fetchAppointments(); // Refresh list
+            fetchAppointments();
         } catch (err) {
             console.error("Update failed", err);
         }

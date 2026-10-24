@@ -575,6 +575,32 @@ app.get('/api/student/records', authenticateToken, authorizeRole(['user']), asyn
 });
 
 // ========================================
+// ADMIN: DASHBOARD STATS
+// ========================================
+app.get(
+    '/api/admin/dashboard-stats',
+    authenticateToken,
+    authorizeRole(['admin', 'super_admin']),
+    async (req, res) => {
+        try {
+            // Using PostgreSQL's native functions ensures accuracy regardless of server timezones
+            const pending = await pool.query("SELECT COUNT(*) FROM appointments WHERE LOWER(status) = 'pending'");
+            const todayApps = await pool.query("SELECT COUNT(*) FROM appointments WHERE appointment_date::date = CURRENT_DATE");
+            const completed = await pool.query("SELECT COUNT(*) FROM appointments WHERE LOWER(status) = 'completed'");
+            
+            res.json({ 
+                pending: parseInt(pending.rows[0].count || 0), 
+                today: parseInt(todayApps.rows[0].count || 0), 
+                completed: parseInt(completed.rows[0].count || 0) 
+            });
+        } catch (err) {
+            console.error("Dashboard Stats Error:", err);
+            res.status(500).json({ error: 'Failed to fetch stats' });
+        }
+    }
+);
+
+// ========================================
 // ADMIN AND SUPER ADMIN: ALL APPOINTMENTS
 // ========================================
 
