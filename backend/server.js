@@ -4,17 +4,17 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const { Pool } = pg;
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
-
-if (!process.env.JWT_SECRET) {
-    throw new Error('JWT_SECRET is missing from .env');
-}
-
 const JWT_SECRET = process.env.JWT_SECRET;
 
 app.use(cors({
@@ -583,7 +583,6 @@ app.get(
     authorizeRole(['admin', 'super_admin']),
     async (req, res) => {
         try {
-            // Using PostgreSQL's native functions ensures accuracy regardless of server timezones
             const pending = await pool.query("SELECT COUNT(*) FROM appointments WHERE LOWER(status) = 'pending'");
             const todayApps = await pool.query("SELECT COUNT(*) FROM appointments WHERE appointment_date::date = CURRENT_DATE");
             const completed = await pool.query("SELECT COUNT(*) FROM appointments WHERE LOWER(status) = 'completed'");
