@@ -1,15 +1,30 @@
-import React, { useState, useContext } from 'react';
-import { AuthContext } from '../../context/AuthContext';
+import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../../context/AuthContext';
+import './Dashboard.css';
 
-const BookAppointment = () => {
+export default function BookAppointment() {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
-    const [formData, setFormData] = useState({ date: '', time: '', reason: '' });
-    const [message, setMessage] = useState('');
+    
+    const [formData, setFormData] = useState({
+        date: '',
+        time: '',
+        reason: ''
+    });
+    
+    const [feedback, setFeedback] = useState({ error: '', success: '' });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setFeedback({ error: '', success: '' });
+        setIsSubmitting(true);
+
         try {
             const res = await fetch('http://localhost:5000/api/appointments', {
                 method: 'POST',
@@ -19,39 +34,78 @@ const BookAppointment = () => {
                 },
                 body: JSON.stringify(formData)
             });
-            if (res.ok) {
-                setMessage('Appointment requested successfully!');
-                setTimeout(() => navigate('/student/dashboard'), 1500);
-            } else {
-                setMessage('Failed to book appointment.');
-            }
+            
+            const data = await res.json();
+            
+            if (!res.ok) throw new Error(data.error || 'Failed to book appointment');
+            
+            setFeedback({ success: 'Appointment booked successfully! Redirecting...', error: '' });
+            
+            setTimeout(() => {
+                navigate('/student/dashboard');
+            }, 2000);
+            
         } catch (err) {
-            setMessage('Server error.');
+            setFeedback({ error: err.message, success: '' });
+            setIsSubmitting(false);
         }
     };
 
+    const today = new Date().toISOString().split('T')[0];
+
     return (
-        <div>
-            <h2>Book an Appointment</h2>
-            <div className="card" style={{ marginTop: '20px', maxWidth: '500px' }}>
-                {message && <p style={{ color: 'green', marginBottom: '10px' }}>{message}</p>}
-                <form onSubmit={handleSubmit}>
+        <div className="dashboard-container">
+            <div className="form-card">
+                <h2>Book a Clinic Appointment</h2>
+                <p>Select your preferred date and time for a consultation.</p>
+                
+                {feedback.error && <div className="alert alert-error">{feedback.error}</div>}
+                {feedback.success && <div className="alert alert-success">{feedback.success}</div>}
+                
+                <form onSubmit={handleSubmit} className="appointment-form">
                     <div className="form-group">
-                        <label>Preferred Date</label>
-                        <input type="date" required onChange={e => setFormData({...formData, date: e.target.value})} />
+                        <label htmlFor="date">Date</label>
+                        <input 
+                            type="date" 
+                            id="date" 
+                            name="date" 
+                            min={today}
+                            value={formData.date} 
+                            onChange={handleChange} 
+                            required 
+                        />
                     </div>
+
                     <div className="form-group">
-                        <label>Preferred Time</label>
-                        <input type="time" required onChange={e => setFormData({...formData, time: e.target.value})} />
+                        <label htmlFor="time">Time</label>
+                        <input 
+                            type="time" 
+                            id="time" 
+                            name="time" 
+                            value={formData.time} 
+                            onChange={handleChange} 
+                            required 
+                        />
                     </div>
+
                     <div className="form-group">
-                        <label>Reason for Consultation</label>
-                        <textarea rows="4" required onChange={e => setFormData({...formData, reason: e.target.value})}></textarea>
+                        <label htmlFor="reason">Reason for Visit / Symptoms</label>
+                        <textarea 
+                            id="reason" 
+                            name="reason" 
+                            rows="4"
+                            placeholder="Please briefly describe why you need an appointment..."
+                            value={formData.reason} 
+                            onChange={handleChange} 
+                            required 
+                        />
                     </div>
-                    <button type="submit" className="btn-primary">Submit Request</button>
+
+                    <button type="submit" className="submit-btn" disabled={isSubmitting}>
+                        {isSubmitting ? 'Booking...' : 'Confirm Appointment'}
+                    </button>
                 </form>
             </div>
         </div>
     );
-};
-export default BookAppointment;
+}

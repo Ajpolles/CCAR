@@ -1,47 +1,59 @@
-import React, { useContext } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useContext } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { LayoutDashboard, CalendarPlus, CalendarDays, LogOut } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, Calendar, FileText, User, LogOut } from 'lucide-react';
+import './layout.css';
 
-const StudentLayout = () => {
+export default function StudentLayout() {
     const { user, logout } = useContext(AuthContext);
-    const location = useLocation();
+    const navigate = useNavigate();
 
     return (
-        <div className="app-container">
-            <div className="sidebar">
-                <h2>
-                    <div style={{ background: '#e0f2fe', padding: '6px', borderRadius: '8px' }}>
-                        <LayoutDashboard size={20} color="#2563eb" />
-                    </div>
-                    CCARS Portal
-                </h2>
-                
-                <nav>
-                    <Link to="/student/dashboard" className={location.pathname === '/student/dashboard' ? 'active' : ''}>
-                        <LayoutDashboard size={18} /> Dashboard
-                    </Link>
-                    <Link to="/student/book" className={location.pathname === '/student/book' ? 'active' : ''}>
-                        <CalendarPlus size={18} /> Book Appointment
-                    </Link>
-                    <Link to="/student/appointments" className={location.pathname === '/student/appointments' ? 'active' : ''}>
-                        <CalendarDays size={18} /> My Appointments
-                    </Link>
+        <div className="app-layout">
+            <aside className="sidebar">
+                <div className="sidebar-brand">
+                    <h2>CCARS</h2>
+                </div>
+                <nav className="sidebar-nav">
+                    <NavLink to="/student/dashboard" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+                        <LayoutDashboard size={20} /> Dashboard
+                    </NavLink>
+                    <NavLink to="/student/book-appointment" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+                        <CalendarPlus size={20} /> Book Appointment
+                    </NavLink>
+                    <NavLink to="/student/appointments" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+                        <Calendar size={20} /> My Appointments
+                    </NavLink>
+                    <NavLink to="/student/records" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+                        <FileText size={20} /> Medical Records
+                    </NavLink>
+                    <NavLink to="/student/profile" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+                        <User size={20} /> Profile
+                    </NavLink>
                 </nav>
-
                 <div className="sidebar-footer">
-                    <div className="user-name">{user?.name || "Student User"}</div>
-                    <div className="user-role">Role: Student</div>
-                    <button className="btn-outline" onClick={logout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        <LogOut size={16} /> Logout
+                    <button onClick={logout} className="logout-btn">
+                        <LogOut size={20} /> Logout
                     </button>
                 </div>
-            </div>
+            </aside>
             
-            <div className="main-content">
-                <Outlet />
-            </div>
+            <main className="main-content">
+                <header className="top-header">
+                    <div className="header-profile">
+                        <div className="avatar">
+                            <User size={24} color="#fff" />
+                        </div>
+                        <div className="profile-info">
+                            <span className="profile-name">{user?.name}</span>
+                            <span className="profile-role">Student</span>
+                        </div>
+                    </div>
+                </header>
+                <div className="page-content">
+                    <Outlet />
+                </div>
+            </main>
         </div>
     );
-};
-export default StudentLayout;
+}
