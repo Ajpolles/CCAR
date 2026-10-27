@@ -837,6 +837,116 @@ app.get(
 // ========================================
 // ADMIN: VIEW PATIENT RECORDS
 // ========================================
+// ========================================
+// ADMIN: PATIENT RECORDS PAGE STATS
+// ========================================
+
+app.get(
+    '/api/admin/patient-records/stats',
+    authenticateToken,
+    authorizeRole(['admin', 'super_admin']),
+    async (req, res) => {
+        try {
+            const { rows } = await pool.query(`
+                SELECT
+                    (SELECT COUNT(*)::int
+                     FROM students) AS "totalStudents",
+
+                    (SELECT COUNT(DISTINCT student_id)::int
+                     FROM patient_records) AS "withRecords",
+
+                    (SELECT COUNT(*)::int
+                     FROM students
+                     WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)
+                       AND created_at < DATE_TRUNC('month', CURRENT_DATE)
+                                         + INTERVAL '1 month'
+                    ) AS "newThisMonth"
+            `);
+
+            res.json({
+                ...rows[0],
+                activeConditions: 0
+            });
+        } catch (error) {
+            handleError(res, 'Fetching patient record stats', error);
+        }
+    }
+);
+
+// ========================================
+// ADMIN: PATIENT RECORDS STUDENT LIST
+// ========================================
+
+app.get(
+    '/api/admin/patient-records/students',
+    authenticateToken,
+    authorizeRole(['admin', 'super_admin']),
+    async (req, res) => {
+        try {
+            const { rows } = await pool.query(`
+                SELECT
+                    s.student_id AS id,
+                    s.student_number,
+                    CONCAT_WS(' ', s.first_name, s.last_name)
+                        AS full_name,
+                    s.course,
+                    s.year_level,
+                    MAX(r.visit_date) AS last_visit,
+                    COUNT(r.id)::int AS record_count
+                FROM students s
+                LEFT JOIN patient_records r
+                    ON r.student_id = s.student_id
+                GROUP BY
+                    s.student_id,
+                    s.student_number,
+                    s.first_name,
+                    s.last_name,
+                    s.course,
+                    s.year_level
+                ORDER BY s.first_name ASC, s.last_name ASC
+            `);
+
+            res.json(rows);
+        } catch (error) {
+            handleError(res, 'Fetching patient record students', error);
+        }
+    }
+);
+
+// ========================================
+// ADMIN: PATIENT RECORDS ACTIVITY
+// ========================================
+
+app.get(
+    '/api/admin/patient-records/activity',
+    authenticateToken,
+    authorizeRole(['admin', 'super_admin']),
+    async (req, res) => {
+        try {
+            const { rows } = await pool.query(`
+                SELECT
+                    id,
+                    actor_id,
+                    actor_role,
+                    action,
+                    details,
+                    created_at
+                FROM activity_logs
+                WHERE action IN (
+                    'patient_record_created',
+                    'student_registered'
+                )
+                ORDER BY created_at DESC
+                LIMIT 10
+            `);
+
+            res.json(rows);
+        } catch (error) {
+            handleError(res, 'Fetching patient record activity', error);
+        }
+    }
+);
+
 app.get('/api/admin/students', authenticateToken, authorizeRole(['admin', 'super_admin']), async (req, res) => {
     try {
         const { rows } = await pool.query(
