@@ -1,6 +1,7 @@
 import { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import '../student/Dashboard.css';
+import SearchFilteringAppoinment from '../../components/SearchFilteringAppoinment'
 
 export default function ManageAppointments() {
     const { user } = useContext(AuthContext);
@@ -46,6 +47,8 @@ export default function ManageAppointments() {
                 <h1>Manage Appointments</h1>
                 <p>Review and update student consultation requests.</p>
             </div>
+
+            <AppointmentSearchFilter />
 
             <div className="section-card">
                 {loading ? <p>Loading...</p> : (
