@@ -1,111 +1,168 @@
-import { useEffect, useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useContext, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+    ArrowRight,
+    CalendarCheck2,
+    CalendarClock,
+    CalendarPlus,
+    ClipboardList,
+    HeartPulse,
+    Sparkles,
+} from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
-import { Calendar, FileText, CheckCircle, Clock, PlusSquare } from 'lucide-react';
-import './Dashboard.css';
 
 export default function Dashboard() {
     const { user } = useContext(AuthContext);
-    const navigate = useNavigate();
-    
     const [appointments, setAppointments] = useState([]);
     const [recordsCount, setRecordsCount] = useState(0);
-    
-    const upcoming = appointments.filter(a => a.status === 'confirmed').length;
-    const pending = appointments.filter(a => a.status === 'pending').length;
-    const completed = appointments.filter(a => a.status === 'completed').length;
-    const upcomingAppt = appointments.find(a => a.status === 'confirmed') || null;
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     useEffect(() => {
+        const controller = new AbortController();
+
         const fetchDashboardData = async () => {
             try {
-                const apptRes = await fetch('http://localhost:5000/api/appointments', {
-                    headers: { 'Authorization': `Bearer ${user.token}` }
-                });
-                if (apptRes.ok) {
-                    const data = await apptRes.json();
-                    setAppointments(data);
+                const headers = { Authorization: `Bearer ${user.token}` };
+                const [appointmentsResponse, recordsResponse] = await Promise.all([
+                    fetch('/api/appointments', { headers, signal: controller.signal }),
+                    fetch('/api/student/records', { headers, signal: controller.signal }),
+                ]);
+                const [appointmentsData, recordsData] = await Promise.all([
+                    appointmentsResponse.json(),
+                    recordsResponse.json(),
+                ]);
+
+                if (!appointmentsResponse.ok) {
+                    throw new Error(appointmentsData.error || 'Could not load your appointments.');
+                }
+                if (!recordsResponse.ok) {
+                    throw new Error(recordsData.error || 'Could not load your medical records.');
                 }
 
-                const recRes = await fetch('http://localhost:5000/api/student/records', {
-                    headers: { 'Authorization': `Bearer ${user.token}` }
-                });
-                if (recRes.ok) {
-                    const data = await recRes.json();
-                    setRecordsCount(data.length); 
+                setAppointments(appointmentsData);
+                setRecordsCount(recordsData.length);
+            } catch (fetchError) {
+                if (fetchError.name !== 'AbortError') {
+                    setError(fetchError.message || 'Could not load your dashboard.');
                 }
-            } catch (err) {
-                console.error("Failed to fetch dashboard data");
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
             }
         };
+
         fetchDashboardData();
-    }, [user.token]);
+        return () => controller.abort();
+    }, [user?.token]);
+
+    const pendingCount = appointments.filter(appointment => appointment.status === 'pending').length;
+    const confirmedCount = appointments.filter(appointment => appointment.status === 'confirmed').length;
 
     return (
-        <div className="dashboard-container">
-            <div className="dashboard-header">
-                <h1>Welcome, {user?.name?.split(' ')[0] || 'Student'}!</h1>
-                <p>Here's your health center overview.</p>
-            </div>
+        <div className="dashboard-page">
+            <section className="dashboard-welcome">
+                <div className="welcome-content">
+                    <div className="welcome-label"><Sparkles size={14} /> Your health, your pace</div>
+                    <h1>Good to see you, {user?.name?.split(' ')[0] || 'there'}.</h1>
+                    <p>Take care of yourself. Book a visit or check in on your upcoming clinic appointments.</p>
+                </div>
+                <div className="welcome-illustration" aria-hidden="true">
+                    <HeartPulse size={48} strokeWidth={1.6} />
+                </div>
+            </section>
 
-            <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-icon bg-blue"><Calendar size={24} color="#2563eb" /></div>
-                    <div className="stat-title">Upcoming Appointments</div>
-                    <div className="stat-value">{upcoming}</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon bg-green"><FileText size={24} color="#16a34a" /></div>
-                    <div className="stat-title">Medical Records</div>
-                    <div className="stat-value">{recordsCount}</div> 
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon bg-green-alt"><CheckCircle size={24} color="#15803d" /></div>
-                    <div className="stat-title">Completed Visits</div>
-                    <div className="stat-value">{completed}</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon bg-orange"><Clock size={24} color="#ea580c" /></div>
-                    <div className="stat-title">Pending Requests</div>
-                    <div className="stat-value">{pending}</div>
-                </div>
-            </div>
+            {error && <div className="form-message" role="alert">{error}</div>}
 
-            <div className="dashboard-sections">
-                <div className="section-card">
-                    <div className="section-header">
-                        <h3>Upcoming Appointment</h3>
-                        <button 
-                            className="view-all" 
-                            onClick={() => navigate('/student/appointments')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        >
-                            View All
-                        </button>
+            <section className="stats-grid" aria-label="Appointment summary">
+                <article className="stat-card">
+                    <div className="stat-icon mint"><ClipboardList size={19} /></div>
+                    <div>
+                        <div className="stat-value">{loading ? '—' : appointments.length}</div>
+                        <div className="stat-label">Total appointments</div>
                     </div>
-                    {upcomingAppt ? (
-                        <div className="appointment-details">
-                            <div className="appt-date-time">
-                                <strong>{new Date(upcomingAppt.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
-                                <span>{upcomingAppt.appointment_time}</span>
-                            </div>
-                            <div className="appt-status confirmed">Confirmed</div>
-                            <div className="appt-reason">{upcomingAppt.reason}</div>
-                        </div>
-                    ) : (
-                        <p className="no-data">No upcoming appointments.</p>
-                    )}
+                </article>
+                <article className="stat-card">
+                    <div className="stat-icon amber"><CalendarClock size={19} /></div>
+                    <div>
+                        <div className="stat-value">{loading ? '—' : pendingCount}</div>
+                        <div className="stat-label">Awaiting confirmation</div>
+                    </div>
+                </article>
+                <article className="stat-card">
+                    <div className="stat-icon blue"><CalendarCheck2 size={19} /></div>
+                    <div>
+                        <div className="stat-value">{loading ? '—' : confirmedCount}</div>
+                        <div className="stat-label">Confirmed visits</div>
+                    </div>
+                </article>
+                <article className="stat-card">
+                    <div className="stat-icon mint"><HeartPulse size={19} /></div>
+                    <div>
+                        <div className="stat-value">{loading ? '—' : recordsCount}</div>
+                        <div className="stat-label">Medical records</div>
+                    </div>
+                </article>
+            </section>
+
+            <section id="appointments" aria-labelledby="appointments-heading">
+                <div className="section-heading">
+                    <div>
+                        <h2 id="appointments-heading">Your appointments</h2>
+                        <p>Keep track of your clinic visits and requests.</p>
+                    </div>
+                    <Link className="text-link" to="/student/book-appointment">
+                        Book a visit <ArrowRight size={15} />
+                    </Link>
                 </div>
 
-                <div className="section-card">
-                    <div className="section-header">
-                        <h3>Quick Actions</h3>
+                {loading ? (
+                    <div className="card empty-state" role="status">Loading your appointments…</div>
+                ) : error ? (
+                    <div className="card empty-state">
+                        <p>Your appointment list is unavailable right now.</p>
                     </div>
-                    <button className="quick-action-btn" onClick={() => navigate('/student/book-appointment')}>
-                        <PlusSquare size={20} /> Book New Appointment
-                    </button>
-                </div>
-            </div>
+                ) : appointments.length === 0 ? (
+                    <div className="card empty-state">
+                        <div className="empty-state-icon"><CalendarPlus size={22} /></div>
+                        <h3>No appointments yet</h3>
+                        <p>When you book a clinic visit, its date and status will show up here.</p>
+                        <Link className="btn-primary" to="/student/book-appointment">
+                            <CalendarPlus size={16} /> Book an appointment
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="card appointment-table-wrap">
+                        <table className="appointment-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Reason for visit</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {appointments.slice(0, 6).map(appointment => (
+                                    <tr key={appointment.id}>
+                                        <td>{new Date(`${appointment.appointment_date}T00:00:00`).toLocaleDateString(undefined, {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        })}</td>
+                                        <td>{appointment.appointment_time?.slice(0, 5) || '—'}</td>
+                                        <td>{appointment.reason}</td>
+                                        <td>
+                                            <span className={`badge ${appointment.status}`}>
+                                                {appointment.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
         </div>
     );
 }

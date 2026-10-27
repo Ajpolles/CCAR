@@ -1,21 +1,43 @@
 import express from 'express';
 import pg from 'pg';
+import { PGlite } from '@electric-sql/pglite';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-dotenv.config({ path: path.join(__dirname, '.env') });
+const backendDirectory = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(backendDirectory, '..');
+for (const envPath of [
+    resolve(projectRoot, '.env'),
+    resolve(projectRoot, '.env.env'),
+    resolve(backendDirectory, '.env')
+]) {
+    if (existsSync(envPath)) {
+        dotenv.config({ path: envPath });
+    }
+}
 
 const { Pool } = pg;
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
-const JWT_SECRET = process.env.JWT_SECRET;
+const databaseDriver = process.env.DB_DRIVER || 'embedded';
+
+if (!['embedded', 'postgres'].includes(databaseDriver)) {
+    throw new Error('DB_DRIVER must be either "embedded" or "postgres".');
+}
+
+if (!process.env.JWT_SECRET && databaseDriver === 'postgres') {
+    throw new Error('JWT_SECRET is missing. Set it in the project .env file.');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET
+    || 'ccars-local-development-only-secret-change-before-deployment';
 
 app.use(cors({
     origin: 'http://localhost:5173',
@@ -25,13 +47,15 @@ app.use(cors({
 
 app.use(express.json());
 
-const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: Number(process.env.DB_PORT) || 5432
-});
+const pool = databaseDriver === 'postgres'
+    ? new Pool({
+        user: process.env.DB_USER,
+        host: process.env.DB_HOST,
+        database: process.env.DB_NAME,
+        password: process.env.DB_PASSWORD,
+        port: Number(process.env.DB_PORT) || 5432
+    })
+    : new PGlite(resolve(projectRoot, 'backend', 'data'));
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -1410,10 +1434,19 @@ app.get(
 // ========================================
 
 try {
-    await pool.query('SELECT 1');
+    if (databaseDriver === 'embedded') {
+        const schema = await readFile(
+            resolve(projectRoot, 'backend', 'schema.sql'),
+            'utf8'
+        );
+        await pool.exec(schema);
+    }
 
+    await pool.query('SELECT 1');
     console.log(
-        `PostgreSQL connection successful: ${process.env.DB_NAME}`
+        databaseDriver === 'embedded'
+            ? 'Embedded PostgreSQL database ready'
+            : `PostgreSQL connection successful: ${process.env.DB_NAME}`
     );
 
     app.listen(PORT, () => {
@@ -1422,10 +1455,6 @@ try {
         );
     });
 } catch (error) {
-    console.error(
-        'PostgreSQL connection failed:',
-        error.message
-    );
-
+    console.error('Database initialization failed:', error.message);
     process.exit(1);
 }

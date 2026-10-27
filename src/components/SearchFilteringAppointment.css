@@ -1,0 +1,152 @@
+.appointment-filter {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #1c2b2d;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  background: #ffffff;
+  border: 1px solid #d5dedf;
+  border-radius: 8px;
+  color: #5d6f72;
+}
+.search:focus-within {
+  border-color: #0f6b6e;
+  outline: 2px solid #0f6b6e;
+  outline-offset: 1px;
+}
+.search input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  padding: 13px 0;
+  font-size: 1rem;
+  background: transparent;
+  color: #1c2b2d;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #5d6f72;
+}
+.filters select,
+.filters input {
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  border: 1px solid #d5dedf;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1c2b2d;
+}
+.filters select:focus-visible,
+.filters input:focus-visible,
+.clear-btn:focus-visible {
+  outline: 2px solid #0f6b6e;
+  outline-offset: 1px;
+}
+
+.clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  border: 1px solid #d5dedf;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1c2b2d;
+  cursor: pointer;
+}
+.clear-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.count {
+  margin: 16px 0 8px;
+  font-size: 0.9rem;
+  color: #5d6f72;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid #d5dedf;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.table th,
+.table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #d5dedf;
+  white-space: nowrap;
+}
+.table th {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #5d6f72;
+  background: #f3f7f7;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table small {
+  display: block;
+  color: #5d6f72;
+  font-size: 0.8rem;
+}
+
+.status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.pending { background: #fdf0d0; color: #7a5600; }
+.scheduled { background: #d8ecf5; color: #0b4f6c; }
+.completed { background: #d9f0e0; color: #1d6b38; }
+.cancelled { background: #f6dcdc; color: #8a2a2a; }
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 32px 16px;
+  text-align: center;
+  border: 1px dashed #d5dedf;
+  border-radius: 8px;
+  color: #5d6f72;
+}
+.empty strong {
+  color: #1c2b2d;
+}
+
+@media (max-width: 600px) {
+  .filters label,
+  .filters select,
+  .filters input {
+    width: 100%;
+  }
+}

@@ -17,6 +17,7 @@ import ManageAppointments from './pages/admin/ManageAppointments';
 import ManageSchedules from './pages/admin/ManageSchedules';
 import AdminLayout from './layouts/AdminLayout';
 import AdminDashboard from './pages/admin/adminDashboard';
+import StudentSection from './pages/student/StudentSection';
 
 function App() {
     return (
@@ -30,9 +31,11 @@ function App() {
                         <Route element={<StudentLayout />}>
                             <Route path="/student/dashboard" element={<StudentDashboard />} />
                             <Route path="/student/book-appointment" element={<BookAppointment />} />
+                            <Route path="/student/book" element={<BookAppointment />} />
                             <Route path="/student/appointments" element={<Appointments />} />
                             <Route path="/student/records" element={<Records />} />
                             <Route path="/student/profile" element={<Profile />} />
+                            <Route path="/student/:section" element={<StudentSection />} />
                         </Route>
                     </Route>
 
