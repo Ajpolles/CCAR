@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+
 * {
     margin: 0;
     padding: 0;
@@ -7,5 +9,78 @@
 html, body, #root {
     width: 100%;
     min-height: 100vh;
-    background-color: #f8fafc;
+}
+
+:root {
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+  color: #18332f;
+  background: #f3f7f5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+
+  --color-ink: #18332f;
+  --color-muted: #758580;
+  --color-primary: #167c68;
+  --color-primary-dark: #106653;
+  --color-border: #e5ece8;
+  --color-surface: #ffffff;
+  --color-background: #f3f7f5;
+  --font-heading: 'Manrope', 'DM Sans', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: #464feb;
+  text-decoration: none;
+}
+
+tr th,
+tr td {
+  border: 1px solid #e6e6e6;
+}
+
+tr th {
+  background-color: #f5f5f5;
+}
+
+::selection {
+  color: #ffffff;
+  background: #167c68;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(22, 124, 104, 0.35);
+  outline-offset: 3px;
 }

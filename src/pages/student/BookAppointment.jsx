@@ -1,111 +1,135 @@
-import { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useContext, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+    ArrowLeft,
+    CalendarDays,
+    CheckCircle2,
+    Clock3,
+    HeartPulse,
+    Send,
+} from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
-import './Dashboard.css';
 
 export default function BookAppointment() {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
-    
-    const [formData, setFormData] = useState({
-        date: '',
-        time: '',
-        reason: ''
-    });
-    
-    const [feedback, setFeedback] = useState({ error: '', success: '' });
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formData, setFormData] = useState({ date: '', time: '', reason: '' });
+    const [message, setMessage] = useState('');
+    const [isError, setIsError] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleChange = event => {
+        setFormData(current => ({ ...current, [event.target.name]: event.target.value }));
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setFeedback({ error: '', success: '' });
-        setIsSubmitting(true);
+    const handleSubmit = async event => {
+        event.preventDefault();
+        setMessage('');
+        setIsError(false);
+        setSubmitting(true);
 
         try {
-            const res = await fetch('http://localhost:5000/api/appointments', {
+            const response = await fetch('/api/appointments', {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.token}`
+                    Authorization: `Bearer ${user.token}`,
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(formData),
             });
-            
-            const data = await res.json();
-            
-            if (!res.ok) throw new Error(data.error || 'Failed to book appointment');
-            
-            setFeedback({ success: 'Appointment booked successfully! Redirecting...', error: '' });
-            
-            setTimeout(() => {
-                navigate('/student/dashboard');
-            }, 2000);
-            
-        } catch (err) {
-            setFeedback({ error: err.message, success: '' });
-            setIsSubmitting(false);
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to request an appointment.');
+            }
+
+            setMessage('Your appointment request has been sent.');
+            window.setTimeout(() => navigate('/student/dashboard'), 1500);
+        } catch (error) {
+            setIsError(true);
+            setMessage(error.message || 'Unable to connect to the server.');
+        } finally {
+            setSubmitting(false);
         }
     };
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().slice(0, 10);
 
     return (
-        <div className="dashboard-container">
-            <div className="form-card">
-                <h2>Book a Clinic Appointment</h2>
-                <p>Select your preferred date and time for a consultation.</p>
-                
-                {feedback.error && <div className="alert alert-error">{feedback.error}</div>}
-                {feedback.success && <div className="alert alert-success">{feedback.success}</div>}
-                
-                <form onSubmit={handleSubmit} className="appointment-form">
-                    <div className="form-group">
-                        <label htmlFor="date">Date</label>
-                        <input 
-                            type="date" 
-                            id="date" 
-                            name="date" 
-                            min={today}
-                            value={formData.date} 
-                            onChange={handleChange} 
-                            required 
-                        />
-                    </div>
+        <div className="booking-page">
+            <div className="page-heading">
+                <Link className="text-link" to="/student/dashboard">
+                    <ArrowLeft size={15} /> Back to dashboard
+                </Link>
+                <h1>Book an appointment</h1>
+                <p>Choose a time that works for you. The clinic will review and confirm your request.</p>
+            </div>
 
-                    <div className="form-group">
-                        <label htmlFor="time">Time</label>
-                        <input 
-                            type="time" 
-                            id="time" 
-                            name="time" 
-                            value={formData.time} 
-                            onChange={handleChange} 
-                            required 
-                        />
+            <section className="card form-card">
+                <div className="form-card-heading">
+                    <div className="stat-icon mint"><HeartPulse size={19} /></div>
+                    <div>
+                        <h2>Appointment details</h2>
+                        <p>All fields are required to submit your request.</p>
                     </div>
+                </div>
 
-                    <div className="form-group">
-                        <label htmlFor="reason">Reason for Visit / Symptoms</label>
-                        <textarea 
-                            id="reason" 
-                            name="reason" 
-                            rows="4"
-                            placeholder="Please briefly describe why you need an appointment..."
-                            value={formData.reason} 
-                            onChange={handleChange} 
-                            required 
-                        />
+                {message && (
+                    <div className={`form-message${isError ? '' : ' success'}`} role={isError ? 'alert' : 'status'}>
+                        {isError ? null : <CheckCircle2 size={15} style={{ verticalAlign: 'middle', marginRight: 7 }} />}
+                        {message}
                     </div>
+                )}
 
-                    <button type="submit" className="submit-btn" disabled={isSubmitting}>
-                        {isSubmitting ? 'Booking...' : 'Confirm Appointment'}
+                <form onSubmit={handleSubmit}>
+                    <div className="form-grid">
+                        <div className="form-group">
+                            <label htmlFor="appointment-date">Preferred date</label>
+                            <input
+                                id="appointment-date"
+                                name="date"
+                                type="date"
+                                min={today}
+                                value={formData.date}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="appointment-time">Preferred time</label>
+                            <input
+                                id="appointment-time"
+                                name="time"
+                                type="time"
+                                value={formData.time}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+                        <div className="form-group full-width">
+                            <label htmlFor="appointment-reason">Reason for visit</label>
+                            <textarea
+                                id="appointment-reason"
+                                name="reason"
+                                rows="4"
+                                placeholder="Briefly describe what you’d like help with"
+                                value={formData.reason}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+                    </div>
+                    <button className="btn-primary" type="submit" disabled={submitting}>
+                        <Send size={15} />
+                        {submitting ? 'Sending request…' : 'Submit appointment request'}
                     </button>
                 </form>
-            </div>
+            </section>
+
+            <aside className="booking-note">
+                <div className="stat-icon blue"><Clock3 size={18} /></div>
+                <p><strong>What happens next?</strong><br />Your request will appear on the dashboard while the clinic reviews it.</p>
+                <CalendarDays className="booking-note-decoration" size={24} />
+            </aside>
         </div>
     );
 }
