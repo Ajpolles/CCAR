@@ -5,13 +5,14 @@ import {
     Calendar, Clock, Users, XCircle, CheckCircle,
     Bell, Search, Eye, PlusCircle, FileText,
     ChevronRight, Activity, CalendarDays,
-    CalendarCheck, CalendarX
+    CalendarCheck, CalendarX, X
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import './AdminDashboard.css';
+import './AdminModal.css';
 
 const getLocalDateString = (date = new Date()) => {
     const year = date.getFullYear();
@@ -52,20 +53,6 @@ const formatTime = (timeString) => {
         hour: 'numeric',
         minute: '2-digit'
     });
-};
-
-const cleanName = (name) => {
-    if (typeof name !== 'string') return '';
-
-    return name
-        .trim()
-        .replace(/^(?:(?:dr|doctor)\.?\s*)+/i, '')
-        .trim();
-};
-
-const getDoctorName = (name) => {
-    const actualName = cleanName(name);
-    return actualName ? `Dr. ${actualName}` : 'Dr. Admin';
 };
 
 const getScheduleStatus = (schedule) => {
@@ -115,8 +102,7 @@ export default function AdminDashboard() {
     const [recentActivity, setRecentActivity] = useState([]);
     const [loading, setLoading] = useState(true);
     const [dashboardError, setDashboardError] = useState('');
-
-    const doctorName = getDoctorName(user?.name);
+    const [selectedAppointment, setSelectedAppointment] = useState(null);
 
     useEffect(() => {
         if (!user?.token) {
@@ -154,7 +140,6 @@ export default function AdminDashboard() {
 
                 if (statsRes?.ok) {
                     const data = await statsRes.json();
-                    // Merge API data with default 0s so missing keys don't erase the defaults
                     setStats((prev) => ({ ...prev, ...data }));
                 }
 
@@ -254,7 +239,7 @@ export default function AdminDashboard() {
         <div className="admin-dashboard-container">
             <div className="admin-header">
                 <div className="header-left">
-                    <h1>Welcome back, {doctorName}!</h1>
+                    <h1>Welcome back, {user?.name?.split(' ')[0] || user?.name}!</h1>
                     <p>Here's what's happening at the campus clinic today.</p>
                 </div>
             </div>
@@ -267,7 +252,6 @@ export default function AdminDashboard() {
 
             <div className="stats-grid-6">
                 {[
-                    // Adding ?? 0 guarantees a number is always shown even if the stat is null/undefined
                     { title: "Today's Appointments", value: stats.today ?? 0, icon: <CalendarDays size={20} className="text-blue" />, bg: 'bg-blue-light' },
                     { title: 'Pending Appointments', value: stats.pending ?? 0, icon: <Clock size={20} className="text-orange" />, bg: 'bg-orange-light' },
                     { title: 'Confirmed Appointments', value: stats.confirmed ?? 0, icon: <CalendarCheck size={20} className="text-blue" />, bg: 'bg-blue-light' },
@@ -323,8 +307,11 @@ export default function AdminDashboard() {
                                             </td>
                                             <td>{getStatusBadge(appt.status)}</td>
                                             <td>
-                                                <button type="button" className="action-view-btn" onClick={() => navigate(`/admin/appointments/${appt.id}`)}>
-                                                    <Eye size={14} /> View
+                                                <button
+                                                    type="button"
+                                                    className="action-view-btn"
+                                                    onClick={() => setSelectedAppointment(appt)}>
+                                                    <Eye size={14} /> View Details
                                                 </button>
                                             </td>
                                         </tr>
@@ -540,6 +527,61 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* --- Student & Appointment Details Modal --- */}
+            {selectedAppointment && (
+                <div className="admin-modal-backdrop">
+                    <div className="admin-modal-container">
+                        <div className="admin-modal-header">
+                            <h3>Appointment & Student Details</h3>
+                            <button
+                                type="button"
+                                className="admin-modal-close-btn"
+                                onClick={() => setSelectedAppointment(null)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="admin-modal-body">
+                            <div className="admin-modal-section">
+                                <h4>Student Information</h4>
+                                <div className="admin-modal-grid">
+                                    <div><strong>Name:</strong> {selectedAppointment.student_name || '—'}</div>
+                                    <div><strong>Student Number:</strong> {selectedAppointment.school_id || selectedAppointment.student_number || '—'}</div>
+                                    <div><strong>Course:</strong> {selectedAppointment.course || '—'}</div>
+                                    <div><strong>Year Level:</strong> {selectedAppointment.year_level || '—'}</div>
+                                    <div><strong>Section:</strong> {selectedAppointment.section || '—'}</div>
+                                    <div><strong>Email:</strong> {selectedAppointment.student_email || '—'}</div>
+                                    <div><strong>Contact Number:</strong> {selectedAppointment.contact_number || '—'}</div>
+                                </div>
+                            </div>
+
+                            <div className="admin-modal-section">
+                                <h4>Appointment Information</h4>
+                                <div className="admin-modal-grid">
+                                    <div><strong>Date:</strong> {formatDate(selectedAppointment.appointment_date)}</div>
+                                    <div><strong>Time:</strong> {formatTime(selectedAppointment.appointment_time)}</div>
+                                    <div><strong>Status:</strong> {getStatusBadge(selectedAppointment.status)}</div>
+                                    <div><strong>Assigned Staff:</strong> {[selectedAppointment.admin_first_name, selectedAppointment.admin_last_name].filter(Boolean).join(' ') || 'Unassigned'}</div>
+                                </div>
+                                <div className="admin-modal-reason">
+                                    <strong>Reason for Visit:</strong>
+                                    <p>{selectedAppointment.reason || 'No reason provided.'}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="admin-modal-footer">
+                            <button
+                                type="button"
+                                className="admin-modal-action-close"
+                                onClick={() => setSelectedAppointment(null)}>
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

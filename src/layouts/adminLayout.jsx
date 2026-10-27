@@ -42,8 +42,8 @@ export default function AdminLayout() {
                             <span style={{ color: 'white', fontWeight: 'bold' }}>{user?.name?.charAt(0)}</span>
                         </div>
                         <div className="profile-info">
-                            <span className="profile-name">Dr. {user?.name?.split(' ')[1] || user?.name}</span>
-                            <span className="profile-role">Clinic Admin</span>
+                            <span className="profile-name"> {user?.last_name || user?.name}</span>
+                            <span className="profile-role">{user?.position}</span>
                         </div>
                     </div>
                 </header>

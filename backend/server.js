@@ -269,7 +269,8 @@ app.post('/api/auth/login', async (req, res) => {
                         last_name,
                         email,
                         password_hash,
-                        is_active
+                        is_active,
+                        position
                     FROM admins
                     WHERE email = $1
                 `
@@ -362,7 +363,8 @@ app.post('/api/auth/login', async (req, res) => {
                 id: account.id,
                 role,
                 name,
-                email: account.email
+                email: account.email,
+                position: account.position
             }
         });
     } catch (error) {
@@ -603,6 +605,11 @@ app.get(
 // ADMIN AND SUPER ADMIN: ALL APPOINTMENTS
 // ========================================
 
+
+ // ========================================
+// ADMIN AND SUPER ADMIN: ALL APPOINTMENTS
+// ========================================
+
 app.get(
     '/api/admin/appointments',
     authenticateToken,
@@ -611,39 +618,58 @@ app.get(
         try {
             const { rows } = await pool.query(
                 `SELECT
-                    a.*,
-                    s.student_number,
+                    a.id,
+                    a.student_id,
+                    a.appointment_date,
+                    a.appointment_time,
+                    a.reason,
+                    a.status,
+                    a.created_at,
+                    a.updated_at,
+
+                    s.student_number AS school_id,
+                    CONCAT_WS(
+                        ' ',
+                        s.first_name,
+                        s.last_name
+                    ) AS student_name,
+
                     s.first_name AS student_first_name,
                     s.last_name AS student_last_name,
                     s.email AS student_email,
-                    ss.admin_id,
-                    ad.first_name AS admin_first_name,
-                    ad.last_name AS admin_last_name
-                 FROM appointments a
-                 JOIN students s
-                    ON a.student_id = s.student_id
-                 LEFT JOIN staff_schedules ss
-                    ON a.schedule_id = ss.id
-                 LEFT JOIN admins ad
-                    ON ss.admin_id = ad.admin_id
-                 ORDER BY
+                    s.course,
+                    s.year_level,
+                    s.section,
+                    s.contact_number,
+
+                    EXISTS (
+                        SELECT 1
+                        FROM patient_records pr
+                        WHERE pr.appointment_id = a.id
+                    ) AS has_medical_record
+
+                FROM appointments a
+
+                INNER JOIN students s
+                    ON s.student_id = a.student_id
+
+                ORDER BY
                     a.appointment_date DESC,
-                    a.appointment_time DESC`
+                    a.appointment_time DESC,
+                    a.id DESC`
             );
 
-            res.json(
-                rows.map(row => ({
-                    ...row,
-                    student_name:
-                        `${row.student_first_name} ${row.student_last_name}`.trim(),
-                    school_id: row.student_number
-                }))
-            );
+            res.json(rows);
         } catch (error) {
-            handleError(res, 'Fetching all appointments', error);
+            handleError(
+                res,
+                'Fetching all appointments',
+                error
+            );
         }
     }
 );
+
 
 // ========================================
 // ADMIN: UPDATE APPOINTMENT STATUS
@@ -702,6 +728,62 @@ app.patch(
             });
         } catch (error) {
             handleError(res, 'Updating appointment', error);
+        }
+    }
+);
+
+// ========================================
+// ADMIN: RESCHEDULE APPOINTMENT
+// ========================================
+
+app.patch(
+    '/api/admin/appointments/:id/reschedule',
+    authenticateToken,
+    authorizeRole(['admin']),
+    async (req, res) => {
+        const { appointment_date, appointment_time } = req.body;
+
+        if (!appointment_date || !appointment_time) {
+            return res.status(400).json({
+                error: 'New appointment date and time are required'
+            });
+        }
+
+        try {
+            const { rows } = await pool.query(
+                `UPDATE appointments
+                 SET
+                    appointment_date = $1,
+                    appointment_time = $2,
+                    updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $3
+                 RETURNING *`,
+                [appointment_date, appointment_time, req.params.id]
+            );
+
+            if (rows.length === 0) {
+                return res.status(404).json({
+                    error: 'Appointment not found'
+                });
+            }
+
+            await logActivity(
+                req.user.id,
+                'admin',
+                'appointment_rescheduled',
+                {
+                    appointment_id: rows[0].id,
+                    appointment_date,
+                    appointment_time
+                }
+            );
+
+            res.json({
+                message: 'Appointment rescheduled successfully',
+                appointment: rows[0]
+            });
+        } catch (error) {
+            handleError(res, 'Rescheduling appointment', error);
         }
     }
 );
@@ -835,9 +917,6 @@ app.get(
 );
 
 // ========================================
-// ADMIN: VIEW PATIENT RECORDS
-// ========================================
-// ========================================
 // ADMIN: PATIENT RECORDS PAGE STATS
 // ========================================
 
@@ -934,7 +1013,8 @@ app.get(
                 FROM activity_logs
                 WHERE action IN (
                     'patient_record_created',
-                    'student_registered'
+                    'student_registered',
+                    'consultation_saved'
                 )
                 ORDER BY created_at DESC
                 LIMIT 10
@@ -943,6 +1023,43 @@ app.get(
             res.json(rows);
         } catch (error) {
             handleError(res, 'Fetching patient record activity', error);
+        }
+    }
+);
+
+// ========================================
+// ADMIN: STUDENT APPOINTMENT HISTORY
+// ========================================
+
+app.get(
+    '/api/admin/patient-records/:id/history',
+    authenticateToken,
+    authorizeRole(['admin', 'super_admin']),
+    async (req, res) => {
+        try {
+            const { rows } = await pool.query(
+                `SELECT 
+                    a.id, 
+                    a.appointment_date, 
+                    a.appointment_time, 
+                    a.reason, 
+                    a.status, 
+                    ad.first_name AS admin_first_name, 
+                    ad.last_name AS admin_last_name,
+                    pr.diagnosis_notes,
+                    pr.consultation_notes
+                 FROM appointments a
+                 LEFT JOIN staff_schedules ss ON a.schedule_id = ss.id
+                 LEFT JOIN admins ad ON ss.admin_id = ad.admin_id
+                 LEFT JOIN patient_records pr ON a.id = pr.appointment_id
+                 WHERE a.student_id = $1
+                 ORDER BY a.appointment_date DESC, a.appointment_time DESC`,
+                [req.params.id]
+            );
+
+            res.json(rows);
+        } catch (error) {
+            handleError(res, 'Fetching student appointment history', error);
         }
     }
 );
@@ -993,82 +1110,85 @@ app.get(
 );
 
 // ========================================
-// ADMIN: CREATE PATIENT RECORD
+// ADMIN: TRANSACTIONAL CONSULTATION WORKFLOW & RECORD CREATION
 // ========================================
 
 app.post(
     '/api/admin/records',
     authenticateToken,
-    authorizeRole(['admin']),
+    authorizeRole(['admin', 'super_admin']),
     async (req, res) => {
         const {
-            student_db_id,
             student_id,
             appointment_id,
             visit_date,
             diagnosis_notes,
-            consultation_notes
+            consultation_notes,
+            finalize
         } = req.body;
 
-        const selectedStudentId = student_db_id ?? student_id;
-
-        if (!selectedStudentId || !appointment_id || !visit_date) {
+        if (!student_id || !appointment_id || !visit_date) {
             return res.status(400).json({
                 error: 'Student, appointment, and visit date are required'
             });
         }
 
+        const client = await pool.connect();
         try {
-            const { rows } = await pool.query(
+            await client.query('BEGIN');
+
+            const apptCheck = await client.query(
+                `SELECT id FROM appointments WHERE id = $1 AND student_id = $2`,
+                [appointment_id, student_id]
+            );
+
+            if (apptCheck.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Invalid appointment mapping.' });
+            }
+
+            const recordRes = await client.query(
                 `INSERT INTO patient_records
-                    (
-                        student_id,
-                        appointment_id,
-                        visit_date,
-                        diagnosis_notes,
-                        consultation_notes
-                    )
-                 SELECT
-                    a.student_id,
-                    a.id,
-                    $3,
-                    $4,
-                    $5
-                 FROM appointments a
-                 WHERE a.id = $1
-                   AND a.student_id = $2
+                    (student_id, appointment_id, visit_date, diagnosis_notes, consultation_notes)
+                 VALUES ($1, $2, $3, $4, $5)
+                 ON CONFLICT (appointment_id) DO UPDATE 
+                 SET diagnosis_notes = EXCLUDED.diagnosis_notes,
+                     consultation_notes = EXCLUDED.consultation_notes,
+                     visit_date = EXCLUDED.visit_date
                  RETURNING *`,
                 [
+                    student_id,
                     appointment_id,
-                    selectedStudentId,
                     visit_date,
                     diagnosis_notes || null,
                     consultation_notes || null
                 ]
             );
 
-            if (rows.length === 0) {
-                return res.status(400).json({
-                    error: 'Appointment does not belong to the selected student'
-                });
+            if (finalize) {
+                await client.query(
+                    `UPDATE appointments SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+                    [appointment_id]
+                );
             }
 
-            await logActivity(
-                req.user.id,
-                'admin',
-                'patient_record_created',
-                {
-                    record_id: rows[0].id,
-                    appointment_id: rows[0].appointment_id
-                }
-            );
+            await client.query('COMMIT');
+
+            await logActivity(req.user.id, 'admin', 'consultation_saved', {
+                record_id: recordRes.rows[0].id,
+                appointment_id,
+                finalized: !!finalize
+            });
 
             res.status(201).json({
-                message: 'Patient record saved successfully',
-                record: rows[0]
+                message: 'Consultation saved and finalized successfully',
+                record: recordRes.rows[0]
             });
         } catch (error) {
-            handleError(res, 'Creating patient record', error);
+            await client.query('ROLLBACK');
+            handleError(res, 'Saving consultation record', error);
+        } finally {
+            client.release();
         }
     }
 );
@@ -1516,10 +1636,14 @@ app.get(
 );
 
 // ========================================
-// START SERVER
+// START SERVER & INITIALIZE DB SCHEMAS
 // ========================================
 
 try {
+    await pool.query(`
+        ALTER TABLE patient_records ADD CONSTRAINT uk_appointment_id UNIQUE (appointment_id);
+    `).catch(() => {});
+
     await pool.query('SELECT 1');
 
     console.log(
