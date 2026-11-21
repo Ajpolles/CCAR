@@ -101,3 +101,15 @@
     text-align: center;
     border: 1px solid #fecaca;
 }
+/* CCARS authentication */
+.auth-container { min-height: 100vh; padding: 24px; background: radial-gradient(ellipse at 50% 0%, #e3f3f1 0%, #f3f7f7 58%); font-family: inherit; }
+.auth-form { padding: clamp(24px, 5vw, 42px); border: 1px solid var(--ccars-line); border-radius: 18px; box-shadow: 0 22px 60px rgba(24,50,61,.11); gap: 17px; }
+.auth-form h2 { color: var(--ccars-ink); font-size: 1.65rem; letter-spacing: -.035em; }
+.auth-form input, .auth-form select { min-height: 46px; border-color: #bdced1; border-radius: 9px; color: var(--ccars-ink); }
+.auth-form input:focus, .auth-form select:focus { outline: 0; border-color: var(--ccars-brand); box-shadow: 0 0 0 3px rgba(17,124,120,.14); }
+.auth-form button { min-height: 46px; border-radius: 9px; background: var(--ccars-brand); }
+.auth-form button:hover { background: var(--ccars-brand-strong); }
+.auth-form p { color: var(--ccars-muted); }
+.auth-form p a { color: var(--ccars-brand-strong); }
+.error-alert { color: #8f3039; background: #ffebec; border-color: #efc5c8; border-radius: 9px; }
+@media (max-width: 560px) { .auth-container { padding: 14px; } .name-group, .school-group { flex-direction: column; gap: 10px; } }

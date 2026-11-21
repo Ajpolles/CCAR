@@ -644,3 +644,13 @@
         align-items: flex-start;
     }
 }
+
+/* Staff schedule forms and list */
+.manage-schedules { color: var(--ccars-ink); font-family: inherit; }
+.schedule-card, .schedule-stat-card { border-color: var(--ccars-line); border-radius: var(--ccars-radius); box-shadow: var(--ccars-shadow); }
+.schedule-card-header { border-color: var(--ccars-line); }
+.schedule-form-group > label { color: #405a64; }
+.schedule-input-wrapper { border-radius: 9px; }
+.schedule-input-wrapper:focus-within { border-color: var(--ccars-brand); box-shadow: 0 0 0 3px rgba(17,124,120,.13); }
+.schedule-refresh-btn { border-radius: 9px; }
+@media (max-width: 680px) { .schedule-layout { grid-template-columns: 1fr; } .schedule-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

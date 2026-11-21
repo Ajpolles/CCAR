@@ -176,3 +176,16 @@
         grid-template-columns: 1fr;
     }
 }
+/* Appointment detail dialog */
+.admin-modal-backdrop { background: rgba(15, 42, 49, .55); backdrop-filter: blur(3px); }
+.admin-modal-container { border-color: var(--ccars-line); border-radius: 15px; box-shadow: 0 24px 70px rgba(13,39,46,.22); }
+.admin-modal-header, .admin-modal-footer { border-color: var(--ccars-line); }
+.admin-modal-header h3 { color: var(--ccars-ink); }
+.admin-modal-section h4 { color: var(--ccars-brand-strong); border-color: var(--ccars-line); }
+.admin-modal-grid { color: #324c56; }
+.admin-modal-grid strong, .admin-modal-reason strong { color: var(--ccars-muted); }
+.admin-modal-reason p { background: #f5f9f9; border-color: var(--ccars-line); color: #324c56; }
+.admin-modal-footer { background: #f5f9f9; }
+.admin-modal-action-close { min-height: 40px; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { .admin-modal-backdrop { animation: none; } }
+@media (max-width: 640px) { .admin-modal-backdrop { padding: 10px; } .admin-modal-container { max-height: calc(100dvh - 20px); } .admin-modal-body { padding: 16px; } }

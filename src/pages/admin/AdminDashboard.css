@@ -85,7 +85,7 @@
 /* 6-Column Stats Grid */
 .stats-grid-6 {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
     gap: 16px;
     margin-bottom: 24px;
 }
@@ -198,9 +198,11 @@
     display: inline-block;
 }
 .badge-pending { background: #ffedd5; color: #ea580c; }
-.badge-confirmed { background: #e0e7ff; color: #4338ca; }
+.badge-confirmed, .badge-checked_in { background: #e0e7ff; color: #4338ca; }
+.badge-in_consultation { background: #fef3c7; color: #d97706; }
 .badge-completed { background: #dcfce7; color: #16a34a; }
-.badge-cancelled { background: #fee2e2; color: #dc2626; }
+.badge-cancelled, .badge-rejected { background: #fee2e2; color: #dc2626; }
+.badge-no_show { background: #f1f5f9; color: #475569; }
 .badge-default { background: #f1f5f9; color: #475569; }
 
 /* Action Buttons */
@@ -334,4 +336,87 @@
     .stats-grid-6 { grid-template-columns: repeat(2, 1fr); }
     .header-right { gap: 10px; }
     .header-date { display: none; }
+}
+
+/* Unified admin and super-admin workspace */
+.admin-dashboard-container { min-height: 100%; padding: 0; background: transparent; color: var(--ccars-ink); font-family: inherit; }
+.admin-header { margin-bottom: 24px; }
+.header-left h1 { color: var(--ccars-ink); font-size: clamp(1.45rem, 2vw, 1.9rem); letter-spacing: -.035em; }
+.header-left p, .day-name { color: var(--ccars-muted); }
+.stats-grid-6 { gap: 15px; }
+.stat-card-modern, .card-panel { background: var(--ccars-surface); border: 1px solid var(--ccars-line); border-radius: var(--ccars-radius); box-shadow: var(--ccars-shadow); }
+.stat-card-modern { padding: 18px; }
+.stat-title, .chart-subtitle { color: var(--ccars-muted); }
+.stat-value, .donut-center-text .total-num { color: var(--ccars-ink); }
+.dashboard-grid-layout { gap: 20px; }
+.panel-header { padding: 17px 20px; border-color: var(--ccars-line); }
+.panel-title h3 { color: var(--ccars-ink); }
+.panel-body { padding: 18px 20px; }
+.table-responsive { max-width: 100%; overscroll-behavior-x: contain; scrollbar-color: #b8cbcd transparent; }
+.clean-table { min-width: 620px; }
+.clean-table th { color: #526a73; background: #f4f8f8; border-color: var(--ccars-line); font-size: .72rem; letter-spacing: .045em; text-transform: uppercase; }
+.clean-table td { color: #324c56; border-color: #e8eff0; }
+.clean-table tbody tr:hover { background: #f7fbfb; }
+.status-badge { min-height: 25px; padding: 4px 10px; border: 1px solid currentColor; line-height: 1.2; }
+.badge-pending { background: #fff4df; color: #87500d; }
+.badge-confirmed, .badge-checked_in { background: #e7f0ff; color: #31598b; }
+.badge-in_consultation { background: #fff2d5; color: #86580b; }
+.badge-completed { background: #e4f4eb; color: #176746; }
+.badge-cancelled, .badge-rejected { background: #ffeaeb; color: #9a3640; }
+.badge-no_show, .badge-default { background: #edf2f3; color: #50646d; }
+.action-view-btn { min-height: 34px; border-radius: 8px; color: var(--ccars-brand-strong); }
+.action-view-btn:hover { background: #f1f8f7; border-color: #b6d8d5; }
+.qa-item { border-radius: 10px; }
+.qa-item:hover { background: #f5f9f9; border-color: var(--ccars-line); }
+.qa-item span { color: #324c56; }
+.bg-blue-light { background: #e8f0fc; }
+.bg-orange-light { background: #fff3df; }
+.bg-green-light { background: #e6f4ec; }
+.bg-purple-light { background: #f0eafa; }
+.bg-red-light { background: #ffebec; }
+.text-blue { color: #315e9b; }
+.text-orange { color: #9b6014; }
+.text-green { color: #16805b; }
+.text-purple { color: #7050a5; }
+.text-red { color: #b6404a; }
+.bg-green-avatar { background: var(--ccars-brand); }
+.header-notification { min-width: 40px; min-height: 40px; border-radius: 9px; }
+.header-notification:hover { background: var(--ccars-brand-soft); color: var(--ccars-brand-strong); }
+.charts-container { gap: 18px; }
+@media (max-width: 960px) {
+  .dashboard-grid-layout { grid-template-columns: 1fr; }
+  .charts-container { flex-wrap: wrap; }
+}
+@media (max-width: 760px) {
+  .admin-header { align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+  .header-right { gap: 9px; }
+  .stats-grid-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat-card-modern { padding: 14px; }
+  .stat-value { font-size: 1.45rem; }
+  .panel-header { flex-wrap: wrap; gap: 10px; }
+  .panel-body { padding: 14px; }
+  .charts-container { padding: 14px; }
+}
+@media (max-width: 420px) {
+  .stats-grid-6 { grid-template-columns: 1fr; }
+  .header-profile .profile-text { display: none; }
+}
+
+/* Super-admin shell is inline-styled in the existing page markup. */
+#root:has(main#dashboard) > div { background: var(--ccars-canvas) !important; color: var(--ccars-ink) !important; }
+#root:has(main#dashboard) > div > header { background: #15343e !important; padding: 14px clamp(16px, 3vw, 32px) !important; box-shadow: 0 2px 10px rgba(24,50,61,.12) !important; }
+#root:has(main#dashboard) > div > header > div:first-child > div:first-child { background: var(--ccars-brand) !important; border-radius: 10px !important; }
+#root:has(main#dashboard) > div > header button { min-height: 40px; border-radius: 8px !important; }
+#root:has(main#dashboard) > div > div:has(> aside[aria-label="Super Admin navigation"]) { grid-template-columns: 224px minmax(0, 1fr) !important; }
+#root:has(main#dashboard) aside[aria-label="Super Admin navigation"] { background: #fff !important; border-color: var(--ccars-line) !important; }
+#root:has(main#dashboard) aside[aria-label="Super Admin navigation"] a { margin: 3px 0; border-radius: 8px !important; color: #405a64 !important; }
+#root:has(main#dashboard) aside[aria-label="Super Admin navigation"] a:hover { background: var(--ccars-brand-soft); color: var(--ccars-brand-strong) !important; }
+#root:has(main#dashboard) main#dashboard { padding: clamp(18px, 3vw, 32px) !important; }
+#root:has(main#dashboard) main#dashboard input, #root:has(main#dashboard) main#dashboard select { min-height: 40px; border-color: #bdced1 !important; border-radius: 8px; }
+#root:has(main#dashboard) main#dashboard input:focus, #root:has(main#dashboard) main#dashboard select:focus { outline: 0; border-color: var(--ccars-brand) !important; box-shadow: 0 0 0 3px rgba(17,124,120,.13); }
+#root:has(main#dashboard) main#dashboard button { border-radius: 8px; }
+@media (max-width: 760px) {
+  #root:has(main#dashboard) > div > div:has(> aside[aria-label="Super Admin navigation"]) { display: block !important; }
+  #root:has(main#dashboard) aside[aria-label="Super Admin navigation"] { padding: 12px !important; border-right: 0 !important; border-bottom: 1px solid var(--ccars-line); }
+  #root:has(main#dashboard) aside[aria-label="Super Admin navigation"] a { display: inline-block !important; padding: 9px 10px !important; }
 }

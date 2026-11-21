@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "test": "node --test tests/auth_middleware_test.js tests/api_fetch_test.js tests/central_users_test.js",
+    "preview": "vite preview",
+    "server": "node backend/server.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

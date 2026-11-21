@@ -335,3 +335,26 @@
         width: 100%;
     }
 }
+/* Appointment management controls and data table */
+.manage-appointments .stat-card, .manage-appointments .section-card { border-color: var(--ccars-line); border-radius: var(--ccars-radius); box-shadow: var(--ccars-shadow); }
+.manage-appointments .stat-card:hover { transform: none; box-shadow: var(--ccars-shadow); }
+.manage-appointments .stat-info p { color: var(--ccars-muted); }
+.manage-appointments .stat-info h2, .manage-appointments .appointments-section-header h2 { color: var(--ccars-ink); }
+.manage-appointments .section-card { padding: clamp(16px, 3vw, 24px); }
+.manage-appointments .appointments-section-header { border-color: var(--ccars-line); }
+.manage-appointments .appointments-search, .manage-appointments .appointments-filter { border-color: #bdced1; border-radius: 9px; }
+.manage-appointments .appointments-search:focus-within, .manage-appointments .appointments-filter:focus { border-color: var(--ccars-brand); box-shadow: 0 0 0 3px rgba(17,124,120,.13); }
+.manage-appointments .appointments-table-wrapper { border-color: var(--ccars-line); border-radius: 10px; }
+.manage-appointments .appointments-table { min-width: 680px; }
+.manage-appointments .appointments-table th { color: #526a73; background: #f4f8f8; border-color: var(--ccars-line); font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
+.manage-appointments .appointments-table td { border-color: #e8eff0; }
+.manage-appointments .appointments-table tbody tr:hover { background: #f7fbfb; }
+.manage-appointments .appt-status { border: 1px solid currentColor; }
+.manage-appointments .appt-status.pending { background: #fff4df; color: #87500d; }
+.manage-appointments .appt-status.confirmed { background: #e7f0ff; color: #31598b; }
+.manage-appointments .appt-status.completed { background: #e4f4eb; color: #176746; }
+.manage-appointments .appt-status.cancelled { background: #ffeaeb; color: #9a3640; }
+.manage-appointments .submit-btn { min-height: 40px; background: var(--ccars-brand); border-radius: 9px; }
+.manage-appointments .submit-btn:hover { background: var(--ccars-brand-strong); }
+.manage-appointments .refresh-btn { background: #48616b; }
+@media (max-width: 600px) { .manage-appointments .stats-grid { grid-template-columns: 1fr; } .manage-appointments .appointments-section-header { align-items: stretch; } }

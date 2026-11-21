@@ -1,13 +1,11 @@
 import { useContext } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { LayoutDashboard, CalendarPlus, Calendar, FileText, User, LogOut } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, Calendar, FileText, User, LogOut, Bell, ListChecks } from 'lucide-react';
 import './layout.css';
 
 export default function StudentLayout() {
     const { user, logout } = useContext(AuthContext);
-    const navigate = useNavigate();
-
     return (
         <div className="app-layout">
             <aside className="sidebar">
@@ -23,6 +21,12 @@ export default function StudentLayout() {
                     </NavLink>
                     <NavLink to="/student/appointments" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
                         <Calendar size={20} /> My Appointments
+                    </NavLink>
+                    <NavLink to="/student/waitlist" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+                        <ListChecks size={20} /> Waitlist
+                    </NavLink>
+                    <NavLink to="/student/notifications" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+                        <Bell size={20} /> Notifications
                     </NavLink>
                     <NavLink to="/student/records" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
                         <FileText size={20} /> Medical Records

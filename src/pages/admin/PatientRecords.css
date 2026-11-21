@@ -216,3 +216,18 @@
     .cta-banner { flex-direction: column; text-align: center; gap: 16px; }
     .cta-content { flex-direction: column; }
 }
+/* Records workspace */
+.page-heading { gap: 14px; margin-bottom: 20px; }
+.title-text h2 { color: var(--ccars-ink); letter-spacing: -.03em; }
+.title-text p { color: var(--ccars-muted); }
+.records-stats-grid { gap: 14px; }
+.records-grid-layout { gap: 20px; }
+.records-toolbar { gap: 10px; }
+.search-input-wrapper input, .filter-select { min-height: 42px; border-color: #bdced1; border-radius: 9px; }
+.search-input-wrapper:focus-within, .filter-select:focus { border-color: var(--ccars-brand); box-shadow: 0 0 0 3px rgba(17,124,120,.13); outline: 0; }
+.btn-primary { min-height: 42px; border-radius: 9px; background: var(--ccars-brand); }
+.btn-primary:hover { background: var(--ccars-brand-strong); }
+.btn-secondary { min-height: 42px; border-radius: 9px; }
+.pagination-controls button { min-width: 36px; min-height: 36px; border-radius: 8px; }
+.pagination-controls button.active { background: var(--ccars-brand); border-color: var(--ccars-brand); }
+.cta-banner { border-radius: 13px; }

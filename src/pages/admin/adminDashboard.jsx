@@ -1,9 +1,10 @@
+import { apiFetch } from '../../services/api';
 import { useEffect, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import {
     Calendar, Clock, Users, XCircle, CheckCircle,
-    Bell, Search, Eye, PlusCircle, FileText,
+    Search, Eye, PlusCircle, FileText,
     ChevronRight, Activity, CalendarDays,
     CalendarCheck, CalendarX, X
 } from 'lucide-react';
@@ -89,15 +90,14 @@ export default function AdminDashboard() {
 
     const [stats, setStats] = useState({
         today: 0,
-        pending: 0,
-        confirmed: 0,
-        completed: 0,
         totalPatients: 0,
-        cancelled: 0
+        totalAppointments: 0,
+        totalRecords: 0,
     });
 
-    const [todayAppointments, setTodayAppointments] = useState([]);
-    const [analytics, setAnalytics] = useState([]);
+    const [allAppointments, setAllAppointments] = useState([]);
+    const [waitingQueue, setWaitingQueue] = useState([]);
+    const [appointmentFilter, setAppointmentFilter] = useState('all'); 
     const [schedules, setSchedules] = useState([]);
     const [recentActivity, setRecentActivity] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -106,6 +106,8 @@ export default function AdminDashboard() {
 
     useEffect(() => {
         if (!user?.token) {
+            // The missing token comes from authenticated route state.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setLoading(false);
             setDashboardError('Your session has expired. Please log in again.');
             return;
@@ -125,15 +127,15 @@ export default function AdminDashboard() {
                 const [
                     statsRes,
                     apptRes,
-                    analyticsRes,
                     schedulesRes,
-                    activityRes
+                    activityRes,
+                    waitingQueueRes
                 ] = await Promise.all([
-                    fetch('http://localhost:5000/api/admin/dashboard-stats', { headers }).catch(() => null),
-                    fetch('http://localhost:5000/api/admin/appointments', { headers }).catch(() => null),
-                    fetch('http://localhost:5000/api/admin/analytics', { headers }).catch(() => null),
-                    fetch('http://localhost:5000/api/admin/schedules', { headers }).catch(() => null),
-                    fetch('http://localhost:5000/api/admin/activity-logs', { headers }).catch(() => null)
+                    apiFetch('/api/admin/dashboard-stats', { headers }).catch(() => null),
+                    apiFetch('/api/admin/appointments', { headers }).catch(() => null),
+                    apiFetch('/api/admin/schedules', { headers }).catch(() => null),
+                    apiFetch('/api/admin/activity-logs', { headers }).catch(() => null),
+                    apiFetch(`/api/admin/waiting-queue?date=${getLocalDateString()}`, { headers }).catch(() => null)
                 ]);
 
                 if (cancelled) return;
@@ -145,19 +147,7 @@ export default function AdminDashboard() {
 
                 if (apptRes?.ok) {
                     const data = await apptRes.json();
-                    const todayLocal = getLocalDateString();
-                    setTodayAppointments(
-                        Array.isArray(data)
-                            ? data.filter((appointment) =>
-                                String(appointment.appointment_date || '').slice(0, 10) === todayLocal
-                            )
-                            : []
-                    );
-                }
-
-                if (analyticsRes?.ok) {
-                    const data = await analyticsRes.json();
-                    setAnalytics(Array.isArray(data) ? data : []);
+                    setAllAppointments(Array.isArray(data) ? data : []);
                 }
 
                 if (schedulesRes?.ok) {
@@ -170,7 +160,12 @@ export default function AdminDashboard() {
                     setRecentActivity(Array.isArray(data) ? data : []);
                 }
 
-                if (!statsRes?.ok && !apptRes?.ok && !analyticsRes?.ok && !schedulesRes?.ok && !activityRes?.ok) {
+                if (waitingQueueRes?.ok) {
+                    const data = await waitingQueueRes.json();
+                    setWaitingQueue(Array.isArray(data) ? data : []);
+                }
+
+                if (!statsRes?.ok && !apptRes?.ok && !schedulesRes?.ok && !activityRes?.ok && !waitingQueueRes?.ok) {
                     setDashboardError('Unable to load dashboard information. Check your backend connection.');
                 }
             } catch (err) {
@@ -190,37 +185,101 @@ export default function AdminDashboard() {
         };
     }, [user?.token]);
 
-    const barChartData = analytics.map((day) => ({
-        name: day.date_formatted,
-        Confirmed: Number(day.confirmed_count) || 0,
-        Pending: Number(day.pending_count) || 0,
-        Completed: Number(day.completed_count) || 0,
-        Cancelled: Number(day.cancelled_count) || 0
-    }));
+    // --------------------------------------------------------
+    // DYNAMIC DATA CALCULATION (Bypasses faulty backend stats)
+    // --------------------------------------------------------
+
+    // 1. Calculate overall counts based strictly on the fetched database table
+    const dynamicStats = {
+        today: stats.today,
+        totalPatients: stats.totalPatients,
+        totalAppointments: stats.totalAppointments ?? allAppointments.length,
+        totalRecords: stats.totalRecords ?? 0,
+        pending: allAppointments.filter(a => String(a.status).toLowerCase() === 'pending').length,
+        confirmed: allAppointments.filter(a => String(a.status).toLowerCase() === 'confirmed').length,
+        completed: allAppointments.filter(a => String(a.status).toLowerCase() === 'completed').length,
+        cancelled: allAppointments.filter(a => ['cancelled', 'canceled'].includes(String(a.status).toLowerCase())).length,
+        checkedIn: allAppointments.filter(a => ['checked_in', 'late'].includes(a.attendance_status)).length,
+        waitingQueue: waitingQueue.length,
+    };
+
+    // 2. Generate the exact Last 7 Days dates
+    const last7DaysLabels = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        return {
+            fullDate: getLocalDateString(d),
+            display: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        };
+    });
+
+    // 3. Map those exact 7 days to the appointments data for the Bar Chart
+    const barChartData = last7DaysLabels.map((day) => {
+        const dailyAppts = allAppointments.filter(a => String(a.appointment_date).startsWith(day.fullDate));
+        return {
+            name: day.display,
+            Confirmed: dailyAppts.filter(a => String(a.status).toLowerCase() === 'confirmed').length,
+            Pending: dailyAppts.filter(a => String(a.status).toLowerCase() === 'pending').length,
+            Completed: dailyAppts.filter(a => String(a.status).toLowerCase() === 'completed').length,
+            Cancelled: dailyAppts.filter(a => ['cancelled', 'canceled'].includes(String(a.status).toLowerCase())).length,
+        };
+    });
+
+    // 4. Summarize the last 7 days Bar Chart for the Pie Chart
+    const pieTotals = barChartData.reduce((acc, curr) => {
+        acc.Confirmed += curr.Confirmed;
+        acc.Pending += curr.Pending;
+        acc.Completed += curr.Completed;
+        acc.Cancelled += curr.Cancelled;
+        return acc;
+    }, { Confirmed: 0, Pending: 0, Completed: 0, Cancelled: 0 });
 
     const pieData = [
-        { name: 'Confirmed', value: Number(stats.confirmed) || 0, color: '#3b82f6' },
-        { name: 'Completed', value: Number(stats.completed) || 0, color: '#10b981' },
-        { name: 'Pending', value: Number(stats.pending) || 0, color: '#f59e0b' },
-        { name: 'Cancelled', value: Number(stats.cancelled) || 0, color: '#ef4444' }
-    ].filter((item) => item.value > 0);
+        { name: 'Confirmed', value: pieTotals.Confirmed, color: '#3b82f6' },
+        { name: 'Completed', value: pieTotals.Completed, color: '#10b981' },
+        { name: 'Pending', value: pieTotals.Pending, color: '#f59e0b' },
+        { name: 'Cancelled', value: pieTotals.Cancelled, color: '#ef4444' }
+    ].filter(item => item.value > 0);
 
     const totalPieValue = pieData.reduce((total, item) => total + item.value, 0);
+
+    // Filter displayed appointments
+    const todayLocal = getLocalDateString();
+    const displayedAppointments = allAppointments.filter((appt) => {
+        if (appointmentFilter === 'today') {
+            return String(appt.appointment_date || '').slice(0, 10) === todayLocal;
+        }
+        return true; 
+    });
+
+    // History for Modal
+    const studentHistory = selectedAppointment
+        ? allAppointments.filter(a => 
+            a.id !== selectedAppointment.id && 
+            ((a.school_id && a.school_id === selectedAppointment.school_id) || 
+             (a.student_number && a.student_number === selectedAppointment.student_number) ||
+             (a.student_email && a.student_email === selectedAppointment.student_email))
+          ).sort((a, b) => new Date(b.appointment_date) - new Date(a.appointment_date))
+        : [];
 
     const getStatusBadge = (status) => {
         const lower = (status || '').toLowerCase();
         if (lower === 'pending') return <span className="status-badge badge-pending">Pending</span>;
         if (lower === 'confirmed') return <span className="status-badge badge-confirmed">Confirmed</span>;
+        if (lower === 'checked_in') return <span className="status-badge badge-confirmed">Checked In</span>;
+        if (lower === 'in_consultation') return <span className="status-badge badge-pending">In Consultation</span>;
         if (lower === 'completed') return <span className="status-badge badge-completed">Completed</span>;
-        if (lower === 'cancelled') return <span className="status-badge badge-cancelled">Cancelled</span>;
+        if (lower === 'cancelled' || lower === 'canceled') return <span className="status-badge badge-cancelled">Cancelled</span>;
+        if (lower === 'rejected') return <span className="status-badge badge-cancelled">Rejected</span>;
+        if (lower === 'no_show') return <span className="status-badge badge-cancelled">No Show</span>;
         return <span className="status-badge badge-default">{status || 'Unknown'}</span>;
     };
 
     const getActivityIcon = (type) => {
         const description = (type || '').toLowerCase();
-        if (description.includes('submitted') || description.includes('new')) return <PlusCircle size={16} className="text-blue" />;
-        if (description.includes('confirmed') || description.includes('completed')) return <CheckCircle size={16} className="text-green" />;
-        if (description.includes('cancelled')) return <XCircle size={16} className="text-red" />;
+        if (description.includes('submitted') || description.includes('new') || description.includes('booked') || description.includes('registered')) return <PlusCircle size={16} className="text-blue" />;
+        if (description.includes('confirmed') || description.includes('completed') || description.includes('consultation')) return <CheckCircle size={16} className="text-green" />;
+        if (description.includes('cancelled') || description.includes('rejected')) return <XCircle size={16} className="text-red" />;
         return <FileText size={16} className="text-purple" />;
     };
 
@@ -252,12 +311,16 @@ export default function AdminDashboard() {
 
             <div className="stats-grid-6">
                 {[
-                    { title: "Today's Appointments", value: stats.today ?? 0, icon: <CalendarDays size={20} className="text-blue" />, bg: 'bg-blue-light' },
-                    { title: 'Pending Appointments', value: stats.pending ?? 0, icon: <Clock size={20} className="text-orange" />, bg: 'bg-orange-light' },
-                    { title: 'Confirmed Appointments', value: stats.confirmed ?? 0, icon: <CalendarCheck size={20} className="text-blue" />, bg: 'bg-blue-light' },
-                    { title: 'Completed Appointments', value: stats.completed ?? 0, icon: <CheckCircle size={20} className="text-green" />, bg: 'bg-green-light' },
-                    { title: 'Total Patients', value: stats.totalPatients ?? 0, icon: <Users size={20} className="text-purple" />, bg: 'bg-purple-light' },
-                    { title: 'Cancelled Appointments', value: stats.cancelled ?? 0, icon: <CalendarX size={20} className="text-red" />, bg: 'bg-red-light' }
+                    { title: "Today's Appointments", value: dynamicStats.today ?? 0, icon: <CalendarDays size={20} className="text-blue" />, bg: 'bg-blue-light' },
+                    { title: 'Pending Appointments', value: dynamicStats.pending ?? 0, icon: <Clock size={20} className="text-orange" />, bg: 'bg-orange-light' },
+                    { title: 'Confirmed Appointments', value: dynamicStats.confirmed ?? 0, icon: <CalendarCheck size={20} className="text-blue" />, bg: 'bg-blue-light' },
+                    { title: 'Completed Appointments', value: dynamicStats.completed ?? 0, icon: <CheckCircle size={20} className="text-green" />, bg: 'bg-green-light' },
+                    { title: 'Total Patients', value: dynamicStats.totalPatients ?? 0, icon: <Users size={20} className="text-purple" />, bg: 'bg-purple-light' },
+                    { title: 'Cancelled Appointments', value: dynamicStats.cancelled ?? 0, icon: <CalendarX size={20} className="text-red" />, bg: 'bg-red-light' },
+                    { title: 'All Appointments', value: dynamicStats.totalAppointments, icon: <Calendar size={20} className="text-blue" />, bg: 'bg-blue-light' },
+                    { title: 'Patient Records', value: dynamicStats.totalRecords, icon: <FileText size={20} className="text-purple" />, bg: 'bg-purple-light' }
+                    ,{ title: 'Checked In', value: dynamicStats.checkedIn, icon: <CalendarCheck size={20} className="text-blue" />, bg: 'bg-blue-light' }
+                    ,{ title: 'Waiting Queue', value: dynamicStats.waitingQueue, icon: <Users size={20} className="text-orange" />, bg: 'bg-orange-light' }
                 ].map((stat) => (
                     <div className="stat-card-modern" key={stat.title}>
                         <div className={`stat-icon-wrapper ${stat.bg}`}>
@@ -276,10 +339,18 @@ export default function AdminDashboard() {
                     <div className="panel-header">
                         <div className="panel-title">
                             <CalendarDays size={18} className="text-blue" />
-                            <h3>Today's Appointments</h3>
+                            <h3>Appointments</h3>
+                            <select 
+                                value={appointmentFilter} 
+                                onChange={(e) => setAppointmentFilter(e.target.value)}
+                                style={{ marginLeft: '12px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', color: '#334155', outline: 'none' }}
+                            >   
+                                <option value="all">All Appointments</option>
+                                <option value="today">Today</option>
+                            </select>
                         </div>
                         <button type="button" className="link-btn" onClick={() => navigate('/admin/appointments')}>
-                            View All Appointments →
+                            Review All Appointments →
                         </button>
                     </div>
 
@@ -287,6 +358,7 @@ export default function AdminDashboard() {
                         <table className="clean-table">
                             <thead>
                                 <tr>
+                                    {appointmentFilter === 'all' && <th>Date</th>}
                                     <th>Time</th>
                                     <th>Student Name</th>
                                     <th>Reason for Visit</th>
@@ -296,9 +368,10 @@ export default function AdminDashboard() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {todayAppointments.length > 0 ? (
-                                    todayAppointments.slice(0, 5).map((appt) => (
+                                {displayedAppointments.length > 0 ? (
+                                    displayedAppointments.slice(0, 10).map((appt) => (
                                         <tr key={appt.id}>
+                                            {appointmentFilter === 'all' && <td>{formatDate(appt.appointment_date)}</td>}
                                             <td>{formatTime(appt.appointment_time)}</td>
                                             <td>{appt.student_name || 'Unknown Student'}</td>
                                             <td>{appt.reason || '—'}</td>
@@ -318,8 +391,8 @@ export default function AdminDashboard() {
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="6" className="empty-text">
-                                            {loading ? 'Loading appointments...' : 'No appointments today.'}
+                                        <td colSpan={appointmentFilter === 'all' ? 7 : 6} className="empty-text">
+                                            {loading ? 'Loading appointments...' : `No appointments found for ${appointmentFilter === 'today' ? 'today' : 'this criteria'}.`}
                                         </td>
                                     </tr>
                                 )}
@@ -495,9 +568,7 @@ export default function AdminDashboard() {
                             <Clock size={18} className="text-blue" />
                             <h3>Recent Activity</h3>
                         </div>
-                        <button type="button" className="link-btn" onClick={() => navigate('/admin/activity')}>
-                            View All Activity →
-                        </button>
+                        
                     </div>
 
                     <div className="panel-body">
@@ -507,9 +578,9 @@ export default function AdminDashboard() {
                                     <div key={activity.id} className="activity-row">
                                         <div className="activity-left">
                                             <div className="activity-icon-wrapper">
-                                                {getActivityIcon(activity.description)}
+                                                {getActivityIcon(activity.description || activity.action)}
                                             </div>
-                                            <span className="activity-desc">{activity.description}</span>
+                                            <span className="activity-desc">{activity.description || activity.action}</span>
                                         </div>
                                         <div className="activity-time">
                                             {new Date(activity.created_at).toLocaleString('en-US', {
@@ -557,7 +628,7 @@ export default function AdminDashboard() {
                             </div>
 
                             <div className="admin-modal-section">
-                                <h4>Appointment Information</h4>
+                                <h4>Current Appointment Request</h4>
                                 <div className="admin-modal-grid">
                                     <div><strong>Date:</strong> {formatDate(selectedAppointment.appointment_date)}</div>
                                     <div><strong>Time:</strong> {formatTime(selectedAppointment.appointment_time)}</div>
@@ -568,6 +639,36 @@ export default function AdminDashboard() {
                                     <strong>Reason for Visit:</strong>
                                     <p>{selectedAppointment.reason || 'No reason provided.'}</p>
                                 </div>
+                            </div>
+
+                            <div className="admin-modal-section" style={{ marginTop: '10px' }}>
+                                <h4>Student's Appointment History</h4>
+                                {studentHistory.length > 0 ? (
+                                    <table className="clean-table compact-table" style={{ marginTop: '8px' }}>
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Reason</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {studentHistory.slice(0, 3).map((hist) => (
+                                                <tr key={hist.id}>
+                                                    <td>{formatDate(hist.appointment_date)}</td>
+                                                    <td style={{ maxWidth: '180px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {hist.reason || '—'}
+                                                    </td>
+                                                    <td>{getStatusBadge(hist.status)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '12px' }}>
+                                        No previous appointments found for this student in the database.
+                                    </p>
+                                )}
                             </div>
                         </div>
 

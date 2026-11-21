@@ -135,3 +135,33 @@
     flex: 1;
     overflow-y: auto;
 }
+/* CCARS shared application shell */
+.app-layout { background: var(--ccars-canvas); color: var(--ccars-ink); font-family: inherit; }
+.sidebar { flex: 0 0 252px; width: 252px; background: #15343e; color: #e8f2f3; }
+.sidebar-brand { padding: 24px 22px; border-color: rgba(255,255,255,.1); }
+.sidebar-brand h2 { color: #fff; font-size: 18px; letter-spacing: .04em; }
+.sidebar-nav { padding: 16px 12px; gap: 5px; }
+.nav-item { min-height: 44px; padding: 10px 13px; border-radius: 9px; color: #c0d0d3; font-size: 13px; transition: background-color .16s ease, color .16s ease; }
+.nav-item:hover { background: rgba(255,255,255,.08); color: #fff; }
+.nav-item.active { border-left: 0; background: #23615f; color: #fff; box-shadow: inset 3px 0 #71c9ba; }
+.sidebar-footer { padding: 14px 18px; border-color: rgba(255,255,255,.1); }
+.logout-btn { min-height: 42px; color: #c0d0d3; }
+.logout-btn:hover { color: #ffb8b9; }
+.main-content { min-width: 0; overflow: auto; }
+.top-header { height: 68px; padding-inline: clamp(18px, 3vw, 36px); background: rgba(255,255,255,.92); border-color: var(--ccars-line); }
+.header-profile { color: var(--ccars-ink); }
+.avatar { background: var(--ccars-brand); color: #fff; }
+.profile-name { color: var(--ccars-ink); }
+.profile-role { color: var(--ccars-muted); }
+.page-content { width: 100%; padding: clamp(18px, 3vw, 34px); overflow-x: hidden; }
+@media (max-width: 760px) {
+  .app-layout { display: flex; flex-direction: column; }
+  .sidebar { width: 100%; flex: 0 0 auto; }
+  .sidebar-brand { padding: 14px 18px; }
+  .sidebar-nav { flex-direction: row; overflow-x: auto; padding: 8px 12px; scrollbar-width: thin; }
+  .nav-item { flex: 0 0 auto; white-space: nowrap; }
+  .sidebar-footer { padding: 5px 18px 9px; }
+  .logout-btn { min-height: 36px; }
+  .top-header { min-height: 60px; height: auto; padding: 10px 18px; }
+  .page-content { padding: 18px 14px 24px; }
+}

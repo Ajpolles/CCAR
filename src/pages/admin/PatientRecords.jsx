@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useContext } from 'react';
+import { apiFetch } from '../../services/api';
+import { useEffect, useState, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import {
-    FileText, Search, Eye, Users, Activity, Clock, FileCheck, X
+    FileText, Search, Eye, Users, Clock, FileCheck, X
 } from 'lucide-react';
 import './PatientRecords.css';
 
@@ -16,6 +17,7 @@ const formatTime = (timeString) => {
 
 export default function PatientRecords() {
     const { user } = useContext(AuthContext);
+    const token = user?.token;
 
     const [stats, setStats] = useState({ totalStudents: 0, withRecords: 0, newThisMonth: 0 });
     const [students, setStudents] = useState([]);
@@ -36,15 +38,15 @@ export default function PatientRecords() {
 
     const itemsPerPage = 8;
 
-    const fetchRecordsData = async () => {
-        if (!user?.token) return;
+    const fetchRecordsData = useCallback(async () => {
+        if (!token) return;
         setLoading(true);
         try {
-            const headers = { Authorization: `Bearer ${user.token}` };
+            const headers = { Authorization: `Bearer ${token}` };
             const [statsRes, studentsRes, activityRes] = await Promise.all([
-                fetch('http://localhost:5000/api/admin/patient-records/stats', { headers }),
-                fetch('http://localhost:5000/api/admin/patient-records/students', { headers }),
-                fetch('http://localhost:5000/api/admin/patient-records/activity', { headers })
+                apiFetch('/api/admin/patient-records/stats', { headers }),
+                apiFetch('/api/admin/patient-records/students', { headers }),
+                apiFetch('/api/admin/patient-records/activity', { headers })
             ]);
 
             if (statsRes?.ok) setStats(await statsRes.json());
@@ -59,9 +61,13 @@ export default function PatientRecords() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token]);
 
-    useEffect(() => { fetchRecordsData(); }, [user?.token]);
+    useEffect(() => {
+        // These requests synchronize the records page with the backend.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchRecordsData();
+    }, [fetchRecordsData]);
 
     const handleSearch = () => {
         let filtered = [...students];
@@ -86,7 +92,7 @@ export default function PatientRecords() {
         setIsHistoryModalOpen(true); 
         setHistoryLoading(true);
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/patient-records/${student.id}/history`, { headers: { Authorization: `Bearer ${user?.token}` } });
+            const res = await apiFetch(`/api/admin/patient-records/${student.id}/history`, { headers: { Authorization: `Bearer ${user?.token}` } });
             setStudentHistory(res.ok ? await res.json() : []);
         } catch { 
             setStudentHistory([]); 
@@ -142,7 +148,7 @@ export default function PatientRecords() {
                                 <input type="text" placeholder="Search student number..." value={searchId} onChange={e => setSearchId(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                             </div>
                             <select className="filter-select" value={courseFilter} onChange={e => setCourseFilter(e.target.value)}>
-                                <option value="All Courses">All Courses</option><option value="BSCS">BSCS</option><option value="BSIT">BSIT</option><option value="BSN">BSN</option><option value="BSCE">BSCE</option><option value="BSBA">BSBA</option>
+                                <option value="All Courses">All Courses</option><option value="BSCS">BSCS</option><option value="BSIT">BSIT</option><option value="BSN">BSN</option><option value="BSCE">BSCE</option><option value="BSBA">BSBA</option><option value="ACT-AD">ACT-AD</option>
                             </select>
                             <select className="filter-select" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
                                 <option value="All Year Levels">All Year Levels</option><option value="1st Year">1st Year</option><option value="2nd Year">2nd Year</option><option value="3rd Year">3rd Year</option><option value="4th Year">4th Year</option>

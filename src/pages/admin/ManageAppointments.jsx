@@ -1,3 +1,4 @@
+import { apiFetch } from '../../services/api';
 import { useEffect, useState, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import {
@@ -12,7 +13,6 @@ import {
     Stethoscope,
     X,
     CheckCircle,
-    ChevronRight
 } from 'lucide-react';
 import './AdminDashboard.css';
 
@@ -36,9 +36,17 @@ const formatDate = (date) => {
     });
 };
 
+const createConsultForm = visitDate => ({
+    visit_date: visitDate,
+    chief_complaint: '', history_of_present_illness: '', relevant_medical_history: '', vital_signs: {}, vital_signs_text: '{}',
+    clinical_assessment: '', diagnosis: '', treatment: '', medication_information: '', instructions: '',
+    follow_up_recommendation: '', diagnosis_notes: '', consultation_notes: '', finalize: false
+});
+
 export default function ManageAppointments() {
     const { user } = useContext(AuthContext);
     const [appointments, setAppointments] = useState([]);
+    const [rescheduleRequests, setRescheduleRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
@@ -48,21 +56,32 @@ export default function ManageAppointments() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [dateFilter, setDateFilter] = useState('');
+    const [appointmentTypeFilter, setAppointmentTypeFilter] = useState('all');
     const [recordFilter, setRecordFilter] = useState('all');
 
     // Modals
     const [viewAppt, setViewAppt] = useState(null);
+    const [appointmentHistory, setAppointmentHistory] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [informationRequests, setInformationRequests] = useState([]);
+    const [informationQuestion, setInformationQuestion] = useState('');
+    const [informationSaving, setInformationSaving] = useState(false);
+    const [scheduleProposals, setScheduleProposals] = useState([]);
+    const [proposalSchedules, setProposalSchedules] = useState([]);
+    const [proposalForm, setProposalForm] = useState({ schedule_id: '', date: '', time: '', message: '' });
+    const [proposalSaving, setProposalSaving] = useState(false);
+    const [attendanceHistory, setAttendanceHistory] = useState([]);
+    const [attendanceForm, setAttendanceForm] = useState({ status: 'checked_in', reason: '' });
     const [consultAppt, setConsultAppt] = useState(null);
     const [rescheduleAppt, setRescheduleAppt] = useState(null);
     const [cancelAppt, setCancelAppt] = useState(null);
+    const [rejectAppt, setRejectAppt] = useState(null);
+    const [rejectRequest, setRejectRequest] = useState(null);
+    const [rejectionReason, setRejectionReason] = useState('');
+    const token = user?.token;
 
     // Form States
-    const [consultForm, setConsultForm] = useState({
-        visit_date: new Date().toISOString().slice(0, 10),
-        diagnosis_notes: '',
-        consultation_notes: '',
-        finalize: true
-    });
+    const [consultForm, setConsultForm] = useState(() => createConsultForm(new Date().toISOString().slice(0, 10)));
 
     const [rescheduleForm, setRescheduleForm] = useState({
         appointment_date: '',
@@ -70,7 +89,7 @@ export default function ManageAppointments() {
     });
 
     const fetchAppointments = useCallback(async () => {
-        if (!user?.token) {
+        if (!token) {
             setError('Please log in again to view appointments.');
             setLoading(false);
             return;
@@ -80,10 +99,10 @@ export default function ManageAppointments() {
         setError('');
 
         try {
-            const res = await fetch(
-                'http://localhost:5000/api/admin/appointments',
+            const res = await apiFetch(
+                '/api/admin/appointments',
                 {
-                    headers: { Authorization: `Bearer ${user.token}` }
+                    headers: { Authorization: `Bearer ${token}` }
                 }
             );
 
@@ -96,34 +115,137 @@ export default function ManageAppointments() {
         } finally {
             setLoading(false);
         }
-    }, [user?.token]);
+    }, [token]);
 
     useEffect(() => {
+        // The appointments request synchronizes this table with the backend.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchAppointments();
     }, [fetchAppointments]);
+
+    const fetchRescheduleRequests = useCallback(async () => {
+        if (!token) return;
+        try {
+            const response = await apiFetch('/api/admin/reschedule-requests', { headers: { Authorization: `Bearer ${token}` } });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Unable to load reschedule requests.');
+            setRescheduleRequests(Array.isArray(data) ? data : []);
+        } catch (err) {
+            setError(err.message || 'Unable to load reschedule requests.');
+        }
+    }, [token]);
+
+    useEffect(() => {
+        // Keep the request queue synchronized with this page.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchRescheduleRequests();
+    }, [fetchRescheduleRequests]);
 
     const handleClearFilters = () => {
         setSearch('');
         setStatusFilter('all');
         setDateFilter('');
+        setAppointmentTypeFilter('all');
         setRecordFilter('all');
     };
 
-    const updateStatus = async (id, status) => {
+    const reviewRescheduleRequest = async (requestId, status, reason) => {
+        setUpdatingId(requestId);
+        setError('');
+        try {
+            const response = await apiFetch(`/api/admin/reschedule-requests/${requestId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ status, ...(reason ? { reason } : {}) })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Unable to review reschedule request.');
+            setSuccessMsg(data.message);
+            await Promise.all([fetchAppointments(), fetchRescheduleRequests()]);
+            return true;
+        } catch (err) {
+            setError(err.message || 'Unable to review reschedule request.');
+            return false;
+        } finally {
+            setUpdatingId(null);
+        }
+    };
+
+    const openAppointment = async (appointment) => {
+        setViewAppt(appointment);
+        setAppointmentHistory([]);
+        setInformationRequests([]);
+        setInformationQuestion('');
+        setScheduleProposals([]);
+        setAttendanceHistory([]);
+        setAttendanceForm({ status: appointment.attendance_status || 'checked_in', reason: '' });
+        setProposalForm({ schedule_id: '', date: '', time: '', message: '' });
+        setHistoryLoading(true);
+        try {
+            const [historyResponse, requestsResponse, proposalsResponse, schedulesResponse, attendanceResponse] = await Promise.all([
+                apiFetch(`/api/admin/appointments/${appointment.id}/history`, { headers: { Authorization: `Bearer ${token}` } }),
+                apiFetch(`/api/admin/appointments/${appointment.id}/information-requests`, { headers: { Authorization: `Bearer ${token}` } }),
+                apiFetch(`/api/admin/appointments/${appointment.id}/schedule-proposals`, { headers: { Authorization: `Bearer ${token}` } }),
+                apiFetch('/api/admin/schedules', { headers: { Authorization: `Bearer ${token}` } }),
+                apiFetch(`/api/admin/appointments/${appointment.id}/attendance-history`, { headers: { Authorization: `Bearer ${token}` } })
+            ]);
+            const [historyData, requestsData, proposalsData, schedulesData, attendanceData] = await Promise.all([historyResponse.json(), requestsResponse.json(), proposalsResponse.json(), schedulesResponse.json(), attendanceResponse.json()]);
+            if (!historyResponse.ok) throw new Error(historyData.error || 'Unable to load appointment history.');
+            if (!requestsResponse.ok) throw new Error(requestsData.error || 'Unable to load information requests.');
+            if (!proposalsResponse.ok) throw new Error(proposalsData.error || 'Unable to load schedule proposals.');
+            if (!schedulesResponse.ok) throw new Error(schedulesData.error || 'Unable to load staff schedules.');
+            if (!attendanceResponse.ok) throw new Error(attendanceData.error || 'Unable to load attendance history.');
+            setAppointmentHistory(historyData);
+            setInformationRequests(requestsData);
+            setScheduleProposals(proposalsData);
+            setProposalSchedules(schedulesData.filter(schedule => schedule.is_available));
+            setAttendanceHistory(attendanceData);
+        } catch (error) {
+            setError(error.message || 'Unable to load appointment history.');
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    const updateAttendance = async (appointmentId, status, reason = '') => {
+        setUpdatingId(appointmentId);
+        setError('');
+        try {
+            const response = await apiFetch(`/api/admin/appointments/${appointmentId}/attendance`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ status, ...(reason.trim() ? { reason: reason.trim() } : {}) })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Could not update attendance.');
+            setAppointments(items => items.map(item => item.id === appointmentId ? { ...item, attendance_status: data.attendance.status, checked_in_at: data.attendance.checked_in_at } : item));
+            setViewAppt(current => current?.id === appointmentId ? { ...current, attendance_status: data.attendance.status, checked_in_at: data.attendance.checked_in_at } : current);
+                    setAttendanceHistory(items => [...items, { id: `local-${Date.now()}`, new_status: status, previous_status: viewAppt?.attendance_status || null, actor_role: user?.role, reason, created_at: new Date().toISOString(), actor_name: user?.name }]);
+            setAttendanceForm({ status, reason: '' });
+            setSuccessMsg('Attendance updated. Appointment status was not changed.');
+            return true;
+        } catch (err) {
+            setError(err.message || 'Could not update attendance.');
+            return false;
+        } finally {
+            setUpdatingId(null);
+        }
+    };
+
+    const updateStatus = async (id, status, reason) => {
         setUpdatingId(id);
         setError('');
         setSuccessMsg('');
 
         try {
-            const res = await fetch(
-                `http://localhost:5000/api/admin/appointments/${id}/status`,
+            const res = await apiFetch(
+                `/api/admin/appointments/${id}/status`,
                 {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${user.token}`
                     },
-                    body: JSON.stringify({ status })
+                    body: JSON.stringify({ status, ...(reason ? { reason } : {}) })
                 }
             );
 
@@ -133,11 +255,22 @@ export default function ManageAppointments() {
             setSuccessMsg(`Appointment status successfully updated to ${status}.`);
             await fetchAppointments();
             setTimeout(() => setSuccessMsg(''), 4000);
+            return true;
         } catch (err) {
             setError(err.message || 'Unable to update appointment.');
+            return false;
         } finally {
             setUpdatingId(null);
         }
+    };
+
+    const openConsultation = async appointment => {
+        if (appointment.status === 'confirmed') {
+            const started = await updateStatus(appointment.id, 'in_consultation');
+            if (!started) return;
+        }
+        setConsultAppt({ ...appointment, status: 'in_consultation' });
+        setConsultForm(createConsultForm(String(appointment.appointment_date || '').slice(0, 10)));
     };
 
     const handleConsultSubmit = async (e) => {
@@ -147,16 +280,17 @@ export default function ManageAppointments() {
         setUpdatingId(consultAppt.id);
 
         try {
-            const res = await fetch('http://localhost:5000/api/admin/records', {
+            const res = await apiFetch('/api/admin/records', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${user.token}`
                 },
                 body: JSON.stringify({
-                    student_id: consultAppt.student_id,
+                    user_id: consultAppt.user_id,
                     appointment_id: consultAppt.id,
-                    ...consultForm
+                    ...consultForm,
+                    vital_signs: JSON.parse(consultForm.vital_signs_text)
                 })
             });
 
@@ -181,7 +315,7 @@ export default function ManageAppointments() {
         setUpdatingId(rescheduleAppt.id);
 
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/appointments/${rescheduleAppt.id}/reschedule`, {
+            const res = await apiFetch(`/api/admin/appointments/${rescheduleAppt.id}/reschedule`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -213,21 +347,25 @@ export default function ManageAppointments() {
     const filteredAppointments = appointments.filter(appt => {
         const searchText = search.trim().toLowerCase();
         const matchesSearch = [
+            appt.reference_number,
             appt.student_name,
             appt.school_id,
             appt.reason,
-            appt.status
+            appt.status,
+            appt.appointment_type_name
         ].some(val => String(val || '').toLowerCase().includes(searchText));
 
         const matchesStatus = statusFilter === 'all' || String(appt.status || '').toLowerCase() === statusFilter;
         const matchesDate = !dateFilter || String(appt.appointment_date || '').startsWith(dateFilter);
+        const matchesType = appointmentTypeFilter === 'all' || (appt.appointment_type_name || 'Legacy appointment') === appointmentTypeFilter;
         const matchesRecord = 
             recordFilter === 'all' || 
             (recordFilter === 'with' && appt.has_medical_record) || 
             (recordFilter === 'without' && !appt.has_medical_record);
 
-        return matchesSearch && matchesStatus && matchesDate && matchesRecord;
+        return matchesSearch && matchesStatus && matchesDate && matchesType && matchesRecord;
     });
+    const appointmentTypes = [...new Set(appointments.map(appt => appt.appointment_type_name || 'Legacy appointment'))].sort();
 
     const totalCount = appointments.length;
     const pendingCount = appointments.filter(a => a.status?.toLowerCase() === 'pending').length;
@@ -239,8 +377,12 @@ export default function ManageAppointments() {
         const lower = (status || '').toLowerCase();
         if (lower === 'pending') return <span className="status-badge badge-pending">Pending</span>;
         if (lower === 'confirmed') return <span className="status-badge badge-confirmed">Confirmed</span>;
+        if (lower === 'checked_in') return <span className="status-badge badge-confirmed">Checked In</span>;
+        if (lower === 'in_consultation') return <span className="status-badge badge-pending">In Consultation</span>;
         if (lower === 'completed') return <span className="status-badge badge-completed">Completed</span>;
         if (lower === 'cancelled') return <span className="status-badge badge-cancelled">Cancelled</span>;
+        if (lower === 'rejected') return <span className="status-badge badge-cancelled">Rejected</span>;
+        if (lower === 'no_show') return <span className="status-badge badge-cancelled">No Show</span>;
         return <span className="status-badge badge-default">{status || 'Unknown'}</span>;
     };
 
@@ -324,8 +466,12 @@ export default function ManageAppointments() {
                         <option value="all">All Statuses</option>
                         <option value="pending">Pending</option>
                         <option value="confirmed">Confirmed</option>
+                        <option value="checked_in">Checked In</option>
+                        <option value="in_consultation">In Consultation</option>
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="no_show">No Show</option>
                     </select>
 
                     <input
@@ -334,6 +480,16 @@ export default function ManageAppointments() {
                         onChange={e => setDateFilter(e.target.value)}
                         style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', fontSize: '0.85rem', color: '#334155', outline: 'none' }}
                     />
+
+                    <select
+                        aria-label="Filter by appointment type"
+                        value={appointmentTypeFilter}
+                        onChange={e => setAppointmentTypeFilter(e.target.value)}
+                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', fontSize: '0.85rem', color: '#334155', outline: 'none' }}
+                    >
+                        <option value="all">All Appointment Types</option>
+                        {appointmentTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                    </select>
 
                     <select
                         value={recordFilter}
@@ -363,17 +519,18 @@ export default function ManageAppointments() {
                                 <th>Reason</th>
                                 <th>Medical Record</th>
                                 <th>Status</th>
+                                <th>Attendance</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan="6" className="empty-text">Loading appointments...</td>
+                                    <td colSpan="7" className="empty-text">Loading appointments...</td>
                                 </tr>
                             ) : filteredAppointments.length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" className="empty-text">No matching appointments found.</td>
+                                    <td colSpan="7" className="empty-text">No matching appointments found.</td>
                                 </tr>
                             ) : (
                                 filteredAppointments.map(appt => {
@@ -387,6 +544,7 @@ export default function ManageAppointments() {
                                             <td>
                                                 <div style={{ fontWeight: '600', color: '#1e293b' }}>{appt.student_name || 'Unknown Student'}</div>
                                                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{appt.school_id || 'No ID'}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{appt.reference_number}</div>
                                             </td>
                                             <td style={{ maxWidth: '220px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                                                 {appt.reason || '—'}
@@ -399,12 +557,13 @@ export default function ManageAppointments() {
                                                 )}
                                             </td>
                                             <td>{getStatusBadge(appt.status)}</td>
+                                            <td>{appt.attendance_status ? <span className="status-badge badge-confirmed">{appt.attendance_status.replace(/_/g, ' ')}</span> : <span className="status-badge badge-default">Not checked in</span>}</td>
                                             <td>
                                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     <button
                                                         type="button"
                                                         className="action-view-btn"
-                                                        onClick={() => setViewAppt(appt)}
+                                                        onClick={() => openAppointment(appt)}
                                                         title="View Details"
                                                     >
                                                         <Eye size={14} /> View Details
@@ -438,6 +597,15 @@ export default function ManageAppointments() {
                                                             <button
                                                                 type="button"
                                                                 className="action-view-btn"
+                                                                style={{ background: '#64748b', color: 'white', borderColor: '#64748b' }}
+                                                                onClick={() => { setRejectAppt(appt); setRejectionReason(''); }}
+                                                                disabled={updatingId === appt.id}
+                                                            >
+                                                                Reject
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="action-view-btn"
                                                                 style={{ background: '#ef4444', color: 'white', borderColor: '#ef4444' }}
                                                                 onClick={() => setCancelAppt(appt)}
                                                             >
@@ -446,25 +614,17 @@ export default function ManageAppointments() {
                                                         </>
                                                     )}
 
-                                                    {status === 'confirmed' && (
+                                                    {['confirmed', 'in_consultation'].includes(status) && (
                                                         <>
                                                             <button
                                                                 type="button"
                                                                 className="action-view-btn"
                                                                 style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }}
-                                                                onClick={() => {
-                                                                    setConsultAppt(appt);
-                                                                    setConsultForm({
-                                                                        visit_date: String(appt.appointment_date || '').slice(0, 10),
-                                                                        diagnosis_notes: '',
-                                                                        consultation_notes: '',
-                                                                        finalize: true
-                                                                    });
-                                                                }}
+                                                                onClick={() => openConsultation(appt)}
                                                             >
-                                                                <Stethoscope size={14} /> Consult
+                                                                <Stethoscope size={14} /> {status === 'in_consultation' ? 'Continue consultation' : 'Consult'}
                                                             </button>
-                                                            <button
+                                                            {status === 'confirmed' && <><button
                                                                 type="button"
                                                                 className="action-view-btn"
                                                                 style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
@@ -481,32 +641,24 @@ export default function ManageAppointments() {
                                                             <button
                                                                 type="button"
                                                                 className="action-view-btn"
+                                                                style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7' }}
+                                                                onClick={() => updateAttendance(appt.id, 'checked_in')}
+                                                                disabled={updatingId === appt.id}
+                                                            >
+                                                                Check In
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="action-view-btn"
                                                                 style={{ background: '#ef4444', color: 'white', borderColor: '#ef4444' }}
                                                                 onClick={() => setCancelAppt(appt)}
                                                             >
                                                                 Cancel
-                                                            </button>
+                                                            </button></>}
                                                         </>
                                                     )}
 
-                                                    {status === 'completed' && (
-                                                        <button
-                                                            type="button"
-                                                            className="action-view-btn"
-                                                            style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7' }}
-                                                            onClick={() => {
-                                                                setConsultAppt(appt);
-                                                                setConsultForm({
-                                                                    visit_date: String(appt.appointment_date || '').slice(0, 10),
-                                                                    diagnosis_notes: '',
-                                                                    consultation_notes: '',
-                                                                    finalize: true
-                                                                });
-                                                            }}
-                                                        >
-                                                            Edit Consult
-                                                        </button>
-                                                    )}
+                                                    {status === 'completed' && <span>Record finalized</span>}
                                                 </div>
                                             </td>
                                         </tr>
@@ -523,6 +675,32 @@ export default function ManageAppointments() {
                     </div>
                 )}
             </div>
+
+            <section className="panel-card" aria-labelledby="reschedule-requests-title" style={{ marginTop: 20, padding: 20 }}>
+                <h2 id="reschedule-requests-title" style={{ marginTop: 0 }}>Student reschedule requests</h2>
+                {rescheduleRequests.filter(item => item.status === 'pending').length === 0 ? <p>No pending reschedule requests.</p> : (
+                    <div className="table-responsive">
+                        <table className="clean-table">
+                            <thead><tr><th>Student</th><th>Reference</th><th>Current time</th><th>Requested time</th><th>Reason</th><th>Actions</th></tr></thead>
+                            <tbody>{rescheduleRequests.filter(item => item.status === 'pending').map(item => (
+                                <tr key={item.id}>
+                                    <td>{item.student_name} ({item.student_number})</td>
+                                    <td>{item.reference_number}</td>
+                                    <td>{formatDate(item.current_appointment_date)} at {formatTime(item.current_appointment_time)}</td>
+                                    <td>{formatDate(item.requested_date)} at {formatTime(item.requested_time)}</td>
+                                    <td>{item.student_reason}</td>
+                                    <td>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <button type="button" disabled={updatingId === item.id} onClick={() => reviewRescheduleRequest(item.id, 'approved')}>Approve</button>
+                                            <button type="button" disabled={updatingId === item.id} onClick={() => { setRejectRequest(item); setRejectionReason(''); }}>Reject</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}</tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
 
             {/* --- View Details Modal --- */}
             {viewAppt && (
@@ -549,6 +727,7 @@ export default function ManageAppointments() {
 
                             <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                                 <h4 style={{ margin: '0 0 8px 0', color: '#3b82f6', fontSize: '0.95rem' }}>Appointment Details</h4>
+                                <div><strong>Reference:</strong> {viewAppt.reference_number}</div>
                                 <div><strong>Date:</strong> {formatDate(viewAppt.appointment_date)}</div>
                                 <div><strong>Time:</strong> {formatTime(viewAppt.appointment_time)}</div>
                                 <div><strong>Status:</strong> <span style={{ textTransform: 'capitalize', fontWeight: 'bold' }}>{viewAppt.status}</span></div>
@@ -562,10 +741,140 @@ export default function ManageAppointments() {
                             <p style={{ margin: 0, color: '#4b5563', whiteSpace: 'pre-wrap' }}>{viewAppt.reason || 'No reason provided.'}</p>
                         </div>
 
+                        <section aria-label="Appointment review history" style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                            <strong>Review history</strong>
+                            {historyLoading ? <p role="status">Loading history…</p> : appointmentHistory.length === 0 ? <p>No history available.</p> : appointmentHistory.map(item => (
+                                <div key={item.id} style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 8 }}>
+                                    <div><strong>{item.actor_name || item.actor_role}:</strong> {item.event_type === 'rescheduled' ? `Rescheduled to ${item.metadata?.to_date || ''} at ${String(item.metadata?.to_time || '').slice(0, 5)}` : `${item.previous_status ? `${item.previous_status} → ` : ''}${item.new_status}`}</div>
+                                    {item.reason && <p style={{ margin: '4px 0' }}>{item.reason}</p>}
+                                    <small>{new Date(item.created_at).toLocaleString()}</small>
+                                </div>
+                            ))}
+                        </section>
+
+                        <section aria-label="Attendance" style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                            <strong>Attendance</strong>
+                            <p>Current: {viewAppt.attendance_status?.replace(/_/g, ' ') || 'not recorded'}. Appointment status remains {viewAppt.status}.</p>
+                            {attendanceHistory.map(item => <div key={item.id} style={{ borderTop: '1px solid #e2e8f0', paddingTop: 6, marginTop: 6 }}>
+                                <span>{item.previous_status ? `${item.previous_status} → ` : ''}{item.new_status.replace(/_/g, ' ')}</span>
+                                <small> · {item.actor_name || item.actor_role} · {new Date(item.created_at).toLocaleString()}</small>
+                                {item.reason && <p style={{ margin: '4px 0' }}>{item.reason}</p>}
+                            </div>)}
+                            <form onSubmit={async event => {
+                                event.preventDefault();
+                                const changed = await updateAttendance(viewAppt.id, attendanceForm.status, attendanceForm.reason);
+                                if (changed) await fetchAppointments();
+                            }} style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                                <label htmlFor="appointment-attendance-status">Record attendance</label>
+                                <select id="appointment-attendance-status" value={attendanceForm.status} onChange={event => setAttendanceForm(form => ({ ...form, status: event.target.value }))}>
+                                    {['checked_in', 'late', 'no_show', 'excused'].map(status => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+                                </select>
+                                <label htmlFor="appointment-attendance-reason">Reason {['no_show', 'excused'].includes(attendanceForm.status) ? '(required)' : '(optional)'}</label>
+                                <textarea id="appointment-attendance-reason" value={attendanceForm.reason} onChange={event => setAttendanceForm(form => ({ ...form, reason: event.target.value }))} maxLength={1000} rows={2} required={['no_show', 'excused'].includes(attendanceForm.status)} />
+                                <button type="submit" disabled={updatingId === viewAppt.id}>{updatingId === viewAppt.id ? 'Saving…' : 'Save attendance'}</button>
+                            </form>
+                        </section>
+
+                        <section aria-label="Student information requests" style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                            <strong>Request information from student</strong>
+                            {informationRequests.map(item => <div key={item.id} style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 8 }}>
+                                <div><strong>{item.status === 'answered' ? 'Answered' : 'Awaiting reply'}:</strong> {item.question}</div>
+                                {item.response && <p style={{ margin: '4px 0', whiteSpace: 'pre-wrap' }}>{item.response}</p>}
+                                <small>{new Date(item.created_at).toLocaleString()}</small>
+                            </div>)}
+                            {informationRequests.length === 0 && <p>No information requests.</p>}
+                            {!informationRequests.some(item => item.status === 'pending') && <form onSubmit={async event => {
+                                event.preventDefault();
+                                setInformationSaving(true);
+                                setError('');
+                                try {
+                                    const response = await apiFetch(`/api/admin/appointments/${viewAppt.id}/information-requests`, {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                        body: JSON.stringify({ question: informationQuestion.trim() })
+                                    });
+                                    const data = await response.json();
+                                    if (!response.ok) throw new Error(data.error || 'Unable to send information request.');
+                                    setInformationRequests(items => [data.request, ...items]);
+                                    setInformationQuestion('');
+                                    setSuccessMsg('Information request sent to student.');
+                                } catch (err) {
+                                    setError(err.message);
+                                } finally {
+                                    setInformationSaving(false);
+                                }
+                            }} style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                                <label htmlFor="appointment-information-question">Question</label>
+                                <textarea id="appointment-information-question" value={informationQuestion} onChange={event => setInformationQuestion(event.target.value)} maxLength={1000} rows={3} required />
+                                <button type="submit" disabled={!informationQuestion.trim() || informationSaving}>{informationSaving ? 'Sending…' : 'Send request'}</button>
+                            </form>}
+                        </section>
+
+                        <section aria-label="Alternative schedule proposals" style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                            <strong>Propose an alternative schedule</strong>
+                            {scheduleProposals.map(item => <div key={item.id} style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 8 }}>
+                                <div><strong>{item.status}:</strong> {formatDate(item.proposed_date)} at {formatTime(item.proposed_time)}</div>
+                                {item.message && <p style={{ margin: '4px 0' }}>{item.message}</p>}
+                                {item.response_reason && <p style={{ margin: '4px 0' }}>Student: {item.response_reason}</p>}
+                            </div>)}
+                            {scheduleProposals.length === 0 && <p>No schedule proposals.</p>}
+                            {!scheduleProposals.some(item => item.status === 'pending') && <form onSubmit={async event => {
+                                event.preventDefault();
+                                setProposalSaving(true);
+                                setError('');
+                                try {
+                                    const response = await apiFetch(`/api/admin/appointments/${viewAppt.id}/schedule-proposals`, {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                        body: JSON.stringify(proposalForm)
+                                    });
+                                    const data = await response.json();
+                                    if (!response.ok) throw new Error(data.error || 'Unable to propose that schedule.');
+                                    setScheduleProposals(items => [data.proposal, ...items]);
+                                    setProposalForm({ schedule_id: '', date: '', time: '', message: '' });
+                                } catch (err) {
+                                    setError(err.message);
+                                } finally {
+                                    setProposalSaving(false);
+                                }
+                            }} style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                                <label htmlFor="proposal-date">Date</label>
+                                <input id="proposal-date" type="date" value={proposalForm.date} onChange={event => setProposalForm(form => ({ ...form, date: event.target.value, schedule_id: '' }))} required />
+                                <label htmlFor="proposal-schedule">Staff schedule</label>
+                                <select id="proposal-schedule" value={proposalForm.schedule_id} onChange={event => setProposalForm(form => ({ ...form, schedule_id: event.target.value }))} required>
+                                    <option value="">Choose schedule</option>
+                                    {proposalSchedules.filter(schedule => schedule.available_date === proposalForm.date).map(schedule => <option key={schedule.id} value={schedule.id}>{schedule.admin_first_name} {schedule.admin_last_name}, {formatTime(schedule.start_time)}–{formatTime(schedule.end_time)}</option>)}
+                                </select>
+                                <label htmlFor="proposal-time">Start time</label>
+                                <input id="proposal-time" type="time" value={proposalForm.time} onChange={event => setProposalForm(form => ({ ...form, time: event.target.value }))} required />
+                                <label htmlFor="proposal-message">Message to student</label>
+                                <textarea id="proposal-message" value={proposalForm.message} onChange={event => setProposalForm(form => ({ ...form, message: event.target.value }))} maxLength={1000} rows={2} />
+                                <button type="submit" disabled={proposalSaving || !proposalForm.schedule_id || !proposalForm.date || !proposalForm.time}>{proposalSaving ? 'Sending…' : 'Send alternative'}</button>
+                            </form>}
+                        </section>
+
                         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                             <button type="button" className="action-view-btn" style={{ background: '#35b1ef', color: 'white', borderColor: '#64838b', padding: '8px 16px' }} onClick={() => setViewAppt(null)}>Close</button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {(rejectAppt || rejectRequest) && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'grid', placeItems: 'center', zIndex: 1300, padding: 16 }}>
+                    <form role="dialog" aria-modal="true" aria-labelledby="reject-appointment-title" onSubmit={async event => {
+                        event.preventDefault();
+                        if (rejectRequest) {
+                            if (await reviewRescheduleRequest(rejectRequest.id, 'rejected', rejectionReason.trim())) setRejectRequest(null);
+                        } else if (await updateStatus(rejectAppt.id, 'rejected', rejectionReason.trim())) setRejectAppt(null);
+                    }} style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 480, padding: 24, display: 'grid', gap: 12 }}>
+                        <h3 id="reject-appointment-title" style={{ margin: 0 }}>{rejectRequest ? 'Reject reschedule request' : 'Reject appointment request'}</h3>
+                        <p style={{ margin: 0 }}>Write a short explanation the student can see.</p>
+                        <label htmlFor="appointment-rejection-reason">Reason</label>
+                        <textarea id="appointment-rejection-reason" value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} maxLength={1000} rows={4} required />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                            <button type="button" onClick={() => { setRejectAppt(null); setRejectRequest(null); }}>Keep request</button>
+                            <button type="submit" disabled={!rejectionReason.trim() || updatingId === (rejectRequest?.id ?? rejectAppt?.id)}>Reject request</button>
+                        </div>
+                    </form>
                 </div>
             )}
 
@@ -602,6 +911,32 @@ export default function ManageAppointments() {
                             </div>
 
                             <div>
+                                <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px' }}>Chief complaint</label>
+                                <textarea rows="2" maxLength={10000} value={consultForm.chief_complaint} onChange={e => setConsultForm({ ...consultForm, chief_complaint: e.target.value })} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px' }}>History of present illness</label>
+                                <textarea rows="3" maxLength={10000} value={consultForm.history_of_present_illness} onChange={e => setConsultForm({ ...consultForm, history_of_present_illness: e.target.value })} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px' }}>Relevant medical history</label>
+                                <textarea rows="3" maxLength={10000} value={consultForm.relevant_medical_history} onChange={e => setConsultForm({ ...consultForm, relevant_medical_history: e.target.value })} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px' }}>Vital signs (JSON object)</label>
+                                <textarea rows="2" value={consultForm.vital_signs_text} onChange={e => setConsultForm({ ...consultForm, vital_signs_text: e.target.value })} aria-describedby="vitals-help" />
+                                <small id="vitals-help">Example: {`{"temperature":"37 C"}`}. Record only clinic-approved measurements.</small>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px' }}>Clinical assessment</label>
+                                <textarea rows="3" maxLength={10000} value={consultForm.clinical_assessment} onChange={e => setConsultForm({ ...consultForm, clinical_assessment: e.target.value })} />
+                            </div>
+
+                            <div>
                                 <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px' }}>Diagnosis / Medical Findings</label>
                                 <textarea
                                     rows="3"
@@ -611,6 +946,14 @@ export default function ManageAppointments() {
                                     style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', resize: 'vertical' }}
                                 />
                             </div>
+
+                            {[
+                                ['treatment', 'Treatment'], ['medication_information', 'Medication information'],
+                                ['instructions', 'Instructions'], ['follow_up_recommendation', 'Follow-up recommendation']
+                            ].map(([key, label]) => <div key={key}>
+                                <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px' }}>{label}</label>
+                                <textarea rows="2" maxLength={10000} value={consultForm[key]} onChange={e => setConsultForm({ ...consultForm, [key]: e.target.value })} />
+                            </div>)}
 
                             <div>
                                 <label style={{ display: 'block', fontWeight: '600', fontSize: '0.85rem', marginBottom: '4px' }}>Consultation Notes</label>
@@ -630,14 +973,14 @@ export default function ManageAppointments() {
                                         checked={consultForm.finalize}
                                         onChange={e => setConsultForm({ ...consultForm, finalize: e.target.checked })}
                                     />
-                                    <span style={{ fontWeight: '600', fontSize: '0.85rem' }}>Finalize consultation and mark appointment as Completed</span>
+                                    <span style={{ fontWeight: '600', fontSize: '0.85rem' }}>Finalize this clinical record</span>
                                 </label>
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '16px' }}>
                                 <button type="button" className="action-view-btn" style={{ background: '#94a3b8', color: 'white', borderColor: '#94a3b8', padding: '8px 16px' }} onClick={() => setConsultAppt(null)}>Cancel</button>
                                 <button type="submit" className="action-view-btn" style={{ background: '#10b981', color: 'white', borderColor: '#10b981', padding: '8px 16px' }} disabled={updatingId === consultAppt.id}>
-                                    {updatingId === consultAppt.id ? 'Saving...' : 'Complete Consultation'}
+                                    {updatingId === consultAppt.id ? 'Saving...' : consultForm.finalize ? 'Finalize record' : 'Save draft'}
                                 </button>
                             </div>
                         </form>

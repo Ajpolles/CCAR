@@ -1,3 +1,4 @@
+import { apiFetch } from '../../services/api';
 
 import { useCallback, useEffect, useState, useContext } from 'react';
 import {
@@ -82,6 +83,7 @@ const getScheduleStatus = (schedule) => {
 const getScheduleStatusLabel = (status) => {
     if (status === 'expired') return 'Expired';
     if (status === 'today') return 'Today';
+    if (status === 'unavailable') return 'Unavailable';
     return 'Upcoming';
 };
 
@@ -106,9 +108,12 @@ export default function ManageSchedules() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [affectedAppointments, setAffectedAppointments] = useState([]);
+    const [editingId, setEditingId] = useState(null);
+    const token = user?.token;
 
     const fetchSchedules = useCallback(async () => {
-        if (!user?.token) {
+        if (!token) {
             setSchedules([]);
             setLoading(false);
             return;
@@ -118,11 +123,11 @@ export default function ManageSchedules() {
         setError('');
 
         try {
-            const res = await fetch(
-                'http://localhost:5000/api/admin/schedules',
+            const res = await apiFetch(
+                '/api/admin/schedules',
                 {
                     headers: {
-                        Authorization: `Bearer ${user.token}`
+                        Authorization: `Bearer ${token}`
                     }
                 }
             );
@@ -141,9 +146,11 @@ export default function ManageSchedules() {
         } finally {
             setLoading(false);
         }
-    }, [user?.token]);
+    }, [token]);
 
     useEffect(() => {
+        // Loading schedules is the external synchronization for this page.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchSchedules();
     }, [fetchSchedules]);
 
@@ -200,6 +207,7 @@ export default function ManageSchedules() {
         e.preventDefault();
         setError('');
         setSuccess('');
+        setAffectedAppointments([]);
 
         if (!user?.token) {
             setError('Your session has expired. Please log in again.');
@@ -219,10 +227,10 @@ export default function ManageSchedules() {
         setSaving(true);
 
         try {
-            const res = await fetch(
-                'http://localhost:5000/api/admin/schedules',
+            const res = await apiFetch(
+                editingId ? `/api/admin/schedules/${editingId}` : '/api/admin/schedules',
                 {
-                    method: 'POST',
+                    method: editingId ? 'PUT' : 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${user.token}`
@@ -238,6 +246,7 @@ export default function ManageSchedules() {
                     const data = await res.json();
                     if (data.message) message = data.message;
                     if (data.error) message = data.error;
+                    setAffectedAppointments(data.affected_appointments || []);
                 } catch {
                     // Keep the default error message if the response is not JSON.
                 }
@@ -250,14 +259,41 @@ export default function ManageSchedules() {
                 start_time: '',
                 end_time: ''
             });
-
-            setSuccess('Clinic schedule saved successfully.');
+            setSuccess(editingId ? 'Clinic schedule updated successfully.' : 'Clinic schedule saved successfully.');
+            setEditingId(null);
 
             await fetchSchedules();
         } catch (err) {
             setError(err.message || 'Failed to save the schedule.');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const beginEdit = (schedule) => {
+        setEditingId(schedule.id);
+        setFormData({ available_date: String(schedule.available_date).slice(0, 10), start_time: String(schedule.start_time).slice(0, 5), end_time: String(schedule.end_time).slice(0, 5) });
+        setError('');
+        setSuccess('');
+    };
+
+    const toggleAvailability = async (schedule) => {
+        setError('');
+        setSuccess('');
+        try {
+            const response = await apiFetch(`/api/admin/schedules/${schedule.id}/availability`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ is_available: !schedule.is_available })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setAffectedAppointments(data.affected_appointments || []);
+                throw new Error(data?.error || 'Unable to change schedule availability');
+            }
+            setSuccess(data.message || 'Schedule availability updated.');
+            await fetchSchedules();
+        } catch (error) {
+            setError(error.message || 'Unable to change schedule availability');
         }
     };
 
@@ -275,11 +311,11 @@ export default function ManageSchedules() {
     const today = getLocalDateString();
 
     const upcomingCount = schedules.filter(
-        (schedule) => getScheduleStatus(schedule) === 'upcoming'
+        (schedule) => schedule.is_available && getScheduleStatus(schedule) === 'upcoming'
     ).length;
 
     const todayCount = schedules.filter(
-        (schedule) => getScheduleStatus(schedule) === 'today'
+        (schedule) => schedule.is_available && getScheduleStatus(schedule) === 'today'
     ).length;
 
     const expiredCount = schedules.filter(
@@ -289,6 +325,7 @@ export default function ManageSchedules() {
     const availableDatesCount = new Set(
         schedules
             .filter((schedule) => getScheduleStatus(schedule) !== 'expired')
+            .filter((schedule) => schedule.is_available)
             .map((schedule) => String(schedule.available_date).slice(0, 10))
     ).size;
 
@@ -363,7 +400,7 @@ export default function ManageSchedules() {
                             <Plus size={21} />
                         </div>
                         <div>
-                            <h2>Add Availability</h2>
+                            <h2>{editingId ? 'Edit Availability' : 'Add Availability'}</h2>
                             <p>Set the date and hours the clinic is available.</p>
                         </div>
                     </div>
@@ -512,6 +549,13 @@ export default function ManageSchedules() {
                                 {error}
                             </div>
                         )}
+                        {affectedAppointments.length > 0 && <section aria-label="Affected appointments" className="schedule-message schedule-error">
+                            <strong>Review these appointments before changing the schedule.</strong>
+                            <ul>{affectedAppointments.map(appointment => <li key={appointment.id}>
+                                {appointment.reference_number} · {[appointment.student_first_name, appointment.student_last_name].filter(Boolean).join(' ') || 'Student'} · {appointment.appointment_date} at {String(appointment.appointment_time).slice(0, 5)} · {appointment.status}
+                            </li>)}</ul>
+                            <p>The schedule was left unchanged. Use the appointment review page to propose alternatives first.</p>
+                        </section>}
 
                         {success && (
                             <div className="schedule-message schedule-success" role="status">
@@ -535,10 +579,11 @@ export default function ManageSchedules() {
                             ) : (
                                 <>
                                     <CalendarCheck size={18} />
-                                    Save Schedule
+                                    {editingId ? 'Update Schedule' : 'Save Schedule'}
                                 </>
                             )}
                         </button>
+                        {editingId && <button type="button" onClick={() => { setEditingId(null); setFormData({ available_date: '', start_time: '', end_time: '' }); }}>Cancel edit</button>}
                     </form>
                 </section>
 
@@ -583,7 +628,7 @@ export default function ManageSchedules() {
                     ) : (
                         <div className="schedule-records">
                             {sortedSchedules.map((sched) => {
-                                const status = getScheduleStatus(sched);
+                                const status = sched.is_available ? getScheduleStatus(sched) : 'unavailable';
 
                                 return (
                                     <div
@@ -609,7 +654,7 @@ export default function ManageSchedules() {
                                             </div>
 
                                             <div className="schedule-staff-name">
-                                                Staff: {sched.staff_name || 'Clinic Staff'}
+                                                Staff: {[sched.staff_name, sched.admin_first_name, sched.admin_last_name].filter(Boolean).join(' ') || 'Clinic Staff'}
                                             </div>
                                         </div>
 
@@ -618,6 +663,10 @@ export default function ManageSchedules() {
                                         >
                                             {getScheduleStatusLabel(status)}
                                         </span>
+                                        {sched.user_id === (user?.id ?? user?.user_id) && <div style={{ display: 'flex', gap: 6 }}>
+                                            <button type="button" onClick={() => beginEdit(sched)}>Edit</button>
+                                            <button type="button" onClick={() => toggleAvailability(sched)}>{sched.is_available ? 'Close availability' : 'Open availability'}</button>
+                                        </div>}
                                     </div>
                                 );
                             })}
